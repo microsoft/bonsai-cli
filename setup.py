@@ -32,7 +32,7 @@ setup(
         'click>=6.6',
         'requests>=2.11',
         'tabulate>=0.7.5',
-        'bonsai_config==0.2.0',
+        'bonsai_config>=0.2.0',
     ],
     dependency_links=[
         # Temporary until we get bonsai-config on PyPI
