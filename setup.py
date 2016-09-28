@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='bonsai-cli',
-    version='0.3.3',
+    version='0.4.0',
     description='A python library for making API calls to Bonsai BRAIN.',
     long_description=long_description,
     url='http://github.com/BonsaiAI/bonsai-cli',
@@ -32,7 +32,7 @@ setup(
         'click>=6.6',
         'requests>=2.11',
         'tabulate>=0.7.5',
-        'bonsai_config>=0.2.0',
+        'bonsai_config>=0.3.0',
     ],
     packages=find_packages(),
     entry_points={

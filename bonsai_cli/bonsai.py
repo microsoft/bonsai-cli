@@ -17,15 +17,15 @@ from tabulate import tabulate
 from bonsai_config import BonsaiConfig
 
 
-ACCESS_KEY_URL_TEMPLATE = "http://{web_netloc}/accounts/key"
-VALIDATE_URL_TEMPLATE = "http://{web_netloc}/v1/validate"
-LIST_BRAINS_URL_TEMPLATE = "http://{netloc}/v1/{username}"
-CREATE_BRAIN_URL_TEMPLATE = "http://{netloc}/v1/{username}/brains"
-LOAD_INK_URL_TEMPLATE = "http://{netloc}/v1/{username}/{brain}/ink"
-SIMS_INFO_URL_TEMPLATE = "http://{netloc}/v1/{username}/{brain}/sims"
-STATUS_URL_TEMPLATE = "http://{netloc}/v1/{username}/{brain}/status"
-TRAIN_URL_TEMPLATE = "http://{netloc}/v1/{username}/{brain}/train"
-STOP_URL_TEMPLATE = "http://{netloc}/v1/{username}/{brain}/stop"
+ACCESS_KEY_URL_TEMPLATE = "{web_url}/accounts/key"
+VALIDATE_URL_TEMPLATE = "{web_url}/v1/validate"
+LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
+CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
+LOAD_INK_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/ink"
+SIMS_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/sims"
+STATUS_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/status"
+TRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/train"
+STOP_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/stop"
 
 
 # If installed, the program to run on GnuPlot for a two-X-axis plot.
@@ -172,7 +172,7 @@ def configure():
     bonsai_config = BonsaiConfig()
 
     access_key_path = ACCESS_KEY_URL_TEMPLATE.format(
-        web_netloc=bonsai_config.brain_web_netloc())
+        web_url=bonsai_config.brain_web_url())
     access_key_message = "You can get the access key at {}".format(
         access_key_path)
     click.echo(access_key_message)
@@ -182,7 +182,7 @@ def configure():
     click.echo("Validating access key...")
 
     validate_path = VALIDATE_URL_TEMPLATE.format(
-        web_netloc=bonsai_config.brain_web_netloc())
+        web_url=bonsai_config.brain_web_url())
     click.echo("request to {}".format(validate_path))
 
     try:
@@ -220,7 +220,7 @@ def brain_list():
     _verify_required_configuration(bonsai_config)
 
     path = LIST_BRAINS_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username())
 
     try:
@@ -259,7 +259,7 @@ def brain_create(brain_name):
     _verify_required_configuration(bonsai_config)
 
     path = CREATE_BRAIN_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username())
 
     json_body = {"name": brain_name}
@@ -300,7 +300,7 @@ def brain_load(brain_name, inkling_file):
             "Could not read '{}', was it a .ink file?".format(inkling_file), e)
 
     path = LOAD_INK_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username(),
         brain=brain_name)
 
@@ -317,8 +317,8 @@ def brain_load(brain_name, inkling_file):
         try:
             content = response.json()
             click.echo(
-                "Connect simulators to ws://{}{} for training.".format(
-                    bonsai_config.brain_api_netloc(),
+                "Connect simulators to {}{} for training.".format(
+                    bonsai_config.brain_websocket_url(),
                     content["simulator_connect_path"]))
         except (ValueError, KeyError):
             pass
@@ -344,7 +344,7 @@ def sims_list(brain_name):
     _verify_required_configuration(bonsai_config)
 
     path = SIMS_INFO_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username(),
         brain=brain_name)
 
@@ -388,7 +388,7 @@ def brain_train_start(brain_name):
     _verify_required_configuration(bonsai_config)
 
     path = TRAIN_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username(),
         brain=brain_name)
 
@@ -403,9 +403,9 @@ def brain_train_start(brain_name):
         try:
             content = response.json()
             click.echo(
-                "When training completes, connect simulators to ws://{}{} "
+                "When training completes, connect simulators to {}{} "
                 "for predictions".format(
-                    bonsai_config.brain_api_netloc(),
+                    bonsai_config.brain_websocket_url(),
                     content["simulator_predictions_url"]))
         except (ValueError, KeyError):
             pass
@@ -423,7 +423,7 @@ def brain_train_status(brain_name):
     _verify_required_configuration(bonsai_config)
 
     path = STATUS_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username(),
         brain=brain_name)
 
@@ -468,7 +468,7 @@ def brain_train_stop(brain_name):
     _verify_required_configuration(bonsai_config)
 
     path = STOP_URL_TEMPLATE.format(
-        netloc=bonsai_config.brain_api_netloc(),
+        api_url=bonsai_config.brain_api_url(),
         username=bonsai_config.username(),
         brain=brain_name)
 
