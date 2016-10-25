@@ -1,24 +1,31 @@
 from codecs import open
 from setuptools import find_packages, setup
-from os import path
 
-here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+# And also convert to reST
+try:
+    from pypandoc import convert
+
+    def read_md(f): return convert(f, 'rst')
+
+except ImportError:
+    print("warning: pypandoc module not found, "
+          "could not convert Markdown to RST")
+
+    def read_md(f): return open(f, 'r').read()
 
 setup(
     name='bonsai-cli',
-    version='0.4.1',
+    version='0.4.2',
     description='A python library for making API calls to Bonsai BRAIN.',
-    long_description=long_description,
+    long_description=read_md('README.md'),
     url='http://github.com/BonsaiAI/bonsai-cli',
     author='Bonsai Engineering',
     author_email='opensource@bons.ai',
     license='BSD',
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
         'License :: OSI Approved :: BSD License',
