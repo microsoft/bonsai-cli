@@ -17,7 +17,7 @@ except ImportError:
 
 setup(
     name='bonsai-cli',
-    version='0.5.0',
+    version='0.5.1',
     description='A python library for making API calls to Bonsai BRAIN.',
     long_description=read_md('README.md'),
     url='http://github.com/BonsaiAI/bonsai-cli',

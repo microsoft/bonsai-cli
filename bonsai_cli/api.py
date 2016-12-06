@@ -284,7 +284,7 @@ class BonsaiAPI(object):
         >>> {
         >>>     "state": "training",
         >>>     "episode": 23,
-        >>>     "score": 22.0
+        >>>     "objective_score": 22.0
         >>> }
         >>>
         :param brain_name: The name of the BRAIN to obtain the status for.

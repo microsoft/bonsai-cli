@@ -259,23 +259,8 @@ def brain_train_status(brain_name):
 
     training_state = status.get('state', '')
 
-    if training_state == 'ready':
-        click.echo('Ready for training')
-
-    elif training_state == 'queued':
-        click.echo('Scheduled for training')
-
-    elif training_state == 'training':
-        click.echo("Reward for episode {} was {}".format(
-            status.get('episode', 0),
-            float(status.get('score', 0))))
-
-    elif training_state in ['deployed', 'ready_to_deploy']:
-        click.echo('Training complete')
-
-    else:
-        click.echo('Brain state is: {}'.format(
-            training_state))
+    click.echo('Brain state is: {}'.format(
+        training_state))
 
 
 @click.command("stop")
