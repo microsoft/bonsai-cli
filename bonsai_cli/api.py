@@ -4,7 +4,7 @@ import requests
 import requests.exceptions
 
 
-_VALIDATE_URL_TEMPLATE = "{web_url}/v1/validate"
+_VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
 _CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
 _LOAD_INK_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/ink"
@@ -65,7 +65,7 @@ class BonsaiAPI(object):
     error, such as the failing response code and/or error message.
     """
 
-    def __init__(self, access_key, user_name, api_url, web_url):
+    def __init__(self, access_key, user_name, api_url):
         """
         Initializes the API object.
         :param access_key: The access key for the user. This can be obtained
@@ -75,16 +75,11 @@ class BonsaiAPI(object):
                           access key. That is the only scenario in which
                           user_name may be None.
         :param api_url: The URL to for the BRAIN REST API.
-        :param web_url: The URL for the Bonsai User REST API.
         """
-        log.debug('Bootstrapping the Bonsai API with access key %s '
-                  'and user name %s',
-                  access_key, user_name)
+        log.debug('Bootstrapping the Bonsai API for user: %s', user_name)
         self._access_key = access_key
         self._user_name = user_name
         self._api_url = api_url
-        self._web_url = web_url
-        log.debug('Web URL = %s', self._web_url)
         log.debug('API URL = %s', self._api_url)
 
     def _post(self, url, data=None):
@@ -154,8 +149,8 @@ class BonsaiAPI(object):
         :return: Dictionary containing the user-name associated with the access
                  key.
         """
-        log.debug('Validating access key %s...', self._access_key)
-        url = _VALIDATE_URL_TEMPLATE.format(web_url=self._web_url)
+        log.debug('Validating access key')
+        url = _VALIDATE_URL_TEMPLATE.format(api_url=self._api_url)
         return self._post(url=url)
 
     def list_brains(self):

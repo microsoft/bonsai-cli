@@ -1,6 +1,7 @@
 from codecs import open
 from setuptools import find_packages, setup
 
+from bonsai_cli import __version__
 
 # Get the long description from the README file
 # And also convert to reST
@@ -17,7 +18,7 @@ except ImportError:
 
 setup(
     name='bonsai-cli',
-    version='0.5.1',
+    version=__version__,
     description='A python library for making API calls to Bonsai BRAIN.',
     long_description=read_md('README.md'),
     url='http://github.com/BonsaiAI/bonsai-cli',
@@ -41,7 +42,7 @@ setup(
         'click>=6.6',
         'requests>=2.11',
         'tabulate>=0.7.5',
-        'bonsai_config>=0.3.0',
+        'bonsai_config>=0.4.0',
     ],
     packages=find_packages(),
     entry_points={

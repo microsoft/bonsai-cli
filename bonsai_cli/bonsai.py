@@ -14,8 +14,7 @@ from tabulate import tabulate
 
 from bonsai_config import BonsaiConfig
 from bonsai_cli.api import BonsaiAPI, BrainServerError
-
-ACCESS_KEY_URL_TEMPLATE = "{web_url}/accounts/key"
+from bonsai_cli import __version__
 
 
 def _verify_required_configuration(bonsai_config):
@@ -71,19 +70,30 @@ def _api():
     _verify_required_configuration(bonsai_config)
     return BonsaiAPI(access_key=bonsai_config.access_key(),
                      user_name=bonsai_config.username(),
-                     api_url=bonsai_config.brain_api_url(),
-                     web_url=bonsai_config.brain_web_url())
+                     api_url=bonsai_config.brain_api_url())
 
 
-@click.group()
-@click.option('--debug/--no-debug', default=False, help='Enable/disable '
-                                                        'verbose debugging '
-                                                        'output')
-def cli(debug):
+def _show_version():
+    click.echo("bonsai_cli %s" % __version__)
+
+
+@click.group(invoke_without_command=True)
+@click.option('--debug/--no-debug', default=False,
+              help='Enable/disable verbose debugging output.')
+@click.option('--version', is_flag=True,
+              help='Show the program version and exit.')
+@click.pass_context
+def cli(ctx, debug, version):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
     """
     log_level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=log_level)
+
+    if ctx.invoked_subcommand is None:
+        if version:
+            _show_version()
+        else:
+            click.echo(ctx.get_help())
 
 
 @click.group()
@@ -93,23 +103,24 @@ def brain():
 
 
 @click.command()
-def configure():
+@click.option('--key', help='Provide an access key.')
+def configure(key):
     """Authenticate with the BRAIN Server."""
     bonsai_config = BonsaiConfig()
 
-    access_key_path = ACCESS_KEY_URL_TEMPLATE.format(
-        web_url=bonsai_config.brain_web_url())
-    access_key_message = "You can get the access key at {}".format(
-        access_key_path)
-    click.echo(access_key_message)
+    if key:
+        access_key = key
+    else:
+        access_key_message = ("You can get this access key from your "
+                              "Account Settings page on the bonsai website")
+        click.echo(access_key_message)
 
-    access_key = click.prompt(
-        "Access Key (typing will be hidden)", hide_input=True)
+        access_key = click.prompt(
+            "Access Key (typing will be hidden)", hide_input=True)
+
     click.echo("Validating access key...")
-
     api = BonsaiAPI(access_key=access_key, user_name=None,
-                    api_url=bonsai_config.brain_api_url(),
-                    web_url=bonsai_config.brain_web_url())
+                    api_url=bonsai_config.brain_api_url())
     content = None
 
     try:
@@ -126,9 +137,24 @@ def configure():
     click.echo("Success! Your username is {}".format(username))
 
 
+@click.command()
+@click.argument("profile")
+@click.option("--url", default=None, help="Set the brain api url.")
+def switch(profile, url):
+    """Change the active configuration section. """
+    bonsai_config = BonsaiConfig()
+    bonsai_config.update(Profile=profile)
+    if url:
+        bonsai_config.update(Url=url)
+
+    url = bonsai_config.brain_api_url()
+    click.echo("Success! Switched to {}. "
+               "Commands will target: {}".format(profile, url))
+
+
 @click.group()
 def sims():
-    """Retrieve information about simulators"""
+    """Retrieve information about simulators."""
     pass
 
 
@@ -248,7 +274,9 @@ def brain_train_start(brain_name):
 
 @click.command("status")
 @click.argument("brain_name")
-def brain_train_status(brain_name):
+@click.option('--json', default=False, is_flag=True,
+              help='Output status as json')
+def brain_train_status(brain_name, json):
     """Gets training status on the specified BRAIN."""
 
     status = None
@@ -257,10 +285,16 @@ def brain_train_status(brain_name):
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
-    training_state = status.get('state', '')
-
-    click.echo('Brain state is: {}'.format(
-        training_state))
+    if json:
+        click.echo(status)
+    else:
+        keys = list(status.keys())
+        keys.sort()
+        rows = ((k, status[k]) for k in keys)
+        table = tabulate(rows,
+                         headers=['KEY', 'VALUE'],
+                         tablefmt='simple')
+        click.echo(table)
 
 
 @click.command("stop")
@@ -276,12 +310,13 @@ def brain_train_stop(brain_name):
 
 
 # Compose the commands defined above.
-# There are three top level commands: brain, configure, and sims
+# The top level commands: brain, configure, sims and switch
 cli.add_command(brain)
 cli.add_command(configure)
 cli.add_command(sims)
+cli.add_command(switch)
 
-# The brain command has three sub commands: list, load, and train
+# The brain command has sub commands: create, list, load, and train
 brain.add_command(brain_create)
 brain.add_command(brain_list)
 brain.add_command(brain_load)
