@@ -15,6 +15,7 @@ from tabulate import tabulate
 from bonsai_config import BonsaiConfig
 from bonsai_cli.api import BonsaiAPI, BrainServerError
 from bonsai_cli import __version__
+from bonsai_cli.dotbrains import DotBrains
 
 
 def _verify_required_configuration(bonsai_config):
@@ -73,6 +74,19 @@ def _api():
                      api_url=bonsai_config.brain_api_url())
 
 
+def _default_brain():
+    """
+    Look up the currently selected brain.
+    :return: The default brain from the .brains file
+    """
+    dotbrains = DotBrains()
+    brain = dotbrains.get_default()
+    if brain is None:
+        raise click.ClickException(
+            "Missing brain name. Specify a name with `--brain NAME`.")
+    return brain.name
+
+
 def _show_version():
     click.echo("bonsai_cli %s" % __version__)
 
@@ -98,7 +112,7 @@ def cli(ctx, debug, version):
 
 @click.group()
 def brain():
-    """Create, load, train BRAINs."""
+    """Create, delete BRAINs."""
     pass
 
 
@@ -187,20 +201,59 @@ def brain_list():
 @click.command("create")
 @click.argument("brain_name")
 def brain_create(brain_name):
-    """Creates a BRAIN."""
+    """ Creates a BRAIN on the server."""
+    brain_create_server(brain_name)
 
+
+def brain_create_server(brain_name):
     try:
-        _api().create_brain(brain_name)
+        brain_list = _api().list_brains()
+        brains = brain_list['brains']
     except BrainServerError as e:
+        click.echo("Error:")
         _raise_as_click_exception(e)
-    click.echo("Create request succeeded; a new brain was created.")
+
+    names = [b['name'] for b in brains]
+    if brain_name in names:
+        click.echo("Brain {} exists.".format(brain_name))
+    else:
+        click.echo("Creating {}, ".format(brain_name), nl=False)
+        try:
+            _api().create_brain(brain_name)
+        except BrainServerError as e:
+            click.echo("error:")
+            _raise_as_click_exception(e)
+        else:
+            click.echo("created.")
+
+
+@click.command("create")
+@click.argument("brain_name")
+def brain_create_local(brain_name):
+    """Creates a BRAIN and sets the default BRAIN for future commands."""
+
+    brain_create_server(brain_name)
+
+    db = DotBrains()
+    brain = db.find(brain_name)
+    if brain is None:
+        click.echo("Adding {} to '.brains', ".format(brain_name), nl=False)
+        db.add(brain_name)
+        click.echo("added.")
+    else:
+        db.set_default(brain)
+        click.echo("Brain {} is in '.brains'.".format(brain_name))
+    click.echo("")
+    click.echo("Run 'bonsai load' to load inkling and "
+               "training sources into {}.".format(brain_name))
 
 
 @click.command("load")
-@click.argument("brain_name")
+@click.option("--brain", default=_default_brain,
+              help="Override to target another BRAIN.")
 @click.argument("inkling_file")
-def brain_load(brain_name, inkling_file):
-    """Loads an inkling file into the specified BRAIN."""
+def brain_load(brain, inkling_file):
+    """Loads an inkling file into the default BRAIN in .brains."""
 
     inkling_content = None
     try:
@@ -215,7 +268,7 @@ def brain_load(brain_name, inkling_file):
             "Could not read '{}', was it a .ink file?".format(inkling_file), e)
 
     try:
-        content = _api().load_inkling_into_brain(brain_name=brain_name,
+        content = _api().load_inkling_into_brain(brain_name=brain,
                                                  inkling_code=inkling_content)
         click.echo("Load request succeeded; a new brain version was created.")
         click.echo("Connect simulators to {}{} for training".format(
@@ -237,12 +290,13 @@ def brain_train():
 
 
 @click.command("list")
-@click.argument("brain_name")
-def sims_list(brain_name):
+@click.option("--brain", default=_default_brain,
+              help="Override to target another BRAIN.")
+def sims_list(brain):
     """List the simulators connected to the BRAIN server."""
 
     try:
-        content = _api().list_simulators(brain_name)
+        content = _api().list_simulators(brain)
         rows = []
         for sim_name, sim_details in content.items():
             rows.append([sim_name, 1, 'connected'])
@@ -256,11 +310,13 @@ def sims_list(brain_name):
 
 
 @click.command("start")
-@click.argument("brain_name")
-def brain_train_start(brain_name):
+@click.option("--brain", default=_default_brain,
+              help="Override to target another BRAIN.")
+def brain_train_start(brain):
     """Trains the specified BRAIN."""
+
     try:
-        content = _api().start_training_brain(brain_name)
+        content = _api().start_training_brain(brain)
         click.echo(
             "When training completes, connect simulators to {}{} "
             "for predictions".format(
@@ -273,15 +329,16 @@ def brain_train_start(brain_name):
 
 
 @click.command("status")
-@click.argument("brain_name")
+@click.option("--brain", default=_default_brain,
+              help="Override to target another BRAIN.")
 @click.option('--json', default=False, is_flag=True,
               help='Output status as json')
-def brain_train_status(brain_name, json):
+def brain_train_status(brain, json):
     """Gets training status on the specified BRAIN."""
 
     status = None
     try:
-        status = _api().get_brain_status(brain_name)
+        status = _api().get_brain_status(brain)
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
@@ -298,29 +355,33 @@ def brain_train_status(brain_name, json):
 
 
 @click.command("stop")
-@click.argument("brain_name")
-def brain_train_stop(brain_name):
+@click.option("--brain", default=_default_brain,
+              help="Override to target another BRAIN.")
+def brain_train_stop(brain):
     """Stops training on the specified BRAIN."""
 
     try:
-        _api().stop_training_brain(brain_name)
+        _api().stop_training_brain(brain)
         click.echo("Stopped.")
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
 
 # Compose the commands defined above.
-# The top level commands: brain, configure, sims and switch
+# The top level commands: configure, sims and switch
 cli.add_command(brain)
 cli.add_command(configure)
 cli.add_command(sims)
 cli.add_command(switch)
 
-# The brain command has sub commands: create, list, load, and train
+# The brain commands: create, list, load, and train
+cli.add_command(brain_create_local)
+cli.add_command(brain_list)
+cli.add_command(brain_load)
+cli.add_command(brain_train)
+
+# The brain sub commands: create
 brain.add_command(brain_create)
-brain.add_command(brain_list)
-brain.add_command(brain_load)
-brain.add_command(brain_train)
 
 # This sims command has one sub command: list
 sims.add_command(sims_list)

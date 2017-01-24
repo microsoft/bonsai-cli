@@ -23,21 +23,16 @@ $ bonsai configure
 ```
 
 Alpha users:
-1 - Authenticate using a Beta account to generate the `~/.bonsai` config.
+1 - On the alpha site, generate an Access Key.
 2 - Patch `~/.bonsai` with:
 ```
-webhost = alpha.int.bons.ai,
-host = alpha-api.bons.ai
+bonsai switch alpha --url https://alpha-api.int.bons.ai
+bonsai configure
 ```
 
 Load a new or existing brain and initiate training:
 ```
-$ bonsai brain load brain_name /path/to/file.ink
-$ bonsai brain train brain_name
-```
-
-Load an existing brain and deploy it for production use:
-```
-$ bonsai brain load brain_name /path/to/file.ink
-$ bonsai brain deploy brain_name
+$ bonsai create brain_name
+$ bonsai load /path/to/file.ink
+$ bonsai train start
 ```
