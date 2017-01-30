@@ -45,7 +45,7 @@ class DotBrains():
             with open('.brains', 'r') as f:
                 b_obj = json.load(f, object_hook=BrainRef.from_json)
                 brains = b_obj.get('brains', [])
-        except FileNotFoundError:
+        except (OSError, IOError, ValueError):
             pass
         return brains
 

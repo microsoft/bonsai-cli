@@ -190,7 +190,7 @@ def brain_list():
                     pass  # If it's missing a field, ignore it.
         if rows:
             table = tabulate(rows, headers=['BRAIN', 'State'],
-                             tablefmt='fancy_grid')
+                             tablefmt='simple')
             click.echo(table)
         else:
             click.echo('The current user has not created any brains.')
@@ -303,7 +303,7 @@ def sims_list(brain):
 
         table = tabulate(rows,
                          headers=['NAME', 'INSTANCES', 'STATUS'],
-                         tablefmt='fancy_grid')
+                         tablefmt='simple')
         click.echo(table)
     except BrainServerError as e:
         _raise_as_click_exception(e)
