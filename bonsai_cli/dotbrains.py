@@ -36,13 +36,15 @@ class DotBrains():
     can be flagged as 'default', and a lookup to find the brain name
     that is currently flagged. Modifying the file triggers a write.
     """
-    def __init__(self):
+    def __init__(self, path='.'):
+        self.path = path
         self.brains = self._read()
 
     def _read(self):
         brains = []
         try:
-            with open('.brains', 'r') as f:
+            path = os.path.join(self.path, '.brains')
+            with open(path, 'r') as f:
                 b_obj = json.load(f, object_hook=BrainRef.from_json)
                 brains = b_obj.get('brains', [])
         except (OSError, IOError, ValueError):
@@ -53,7 +55,8 @@ class DotBrains():
         output = {
             'brains': [b.to_dict() for b in self.brains]
             }
-        with open('.brains', 'w') as f:
+        path = os.path.join(self.path, '.brains')
+        with open(path, 'w') as f:
             json.dump(output, f)
 
     def find(self, brain_name):

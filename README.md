@@ -33,6 +33,6 @@ bonsai configure
 Load a new or existing brain and initiate training:
 ```
 $ bonsai create brain_name
-$ bonsai load /path/to/file.ink
+$ bonsai load
 $ bonsai train start
 ```

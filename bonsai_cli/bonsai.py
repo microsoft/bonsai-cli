@@ -16,6 +16,8 @@ from bonsai_config import BonsaiConfig
 from bonsai_cli.api import BonsaiAPI, BrainServerError
 from bonsai_cli import __version__
 from bonsai_cli.dotbrains import DotBrains
+from bonsai_cli.projfile import ProjectDefault
+from bonsai_cli.projfile import ProjectFile, ProjectFileInvalidError
 
 
 def _verify_required_configuration(bonsai_config):
@@ -87,27 +89,40 @@ def _default_brain():
     return brain.name
 
 
+def _brain_fallback(brain, project):
+    """
+    Implements the fallback options for brain name.
+    If a brain is given directly, use it.
+    If a project is specified, check that for a brain.
+    If neither is given, use .brains locally.
+    """
+    if brain:
+        return brain
+    if project:
+        pf = ProjectFile.from_file_or_dir(project)
+        db = DotBrains(pf.directory())
+        b = db.get_default()
+        if b:
+            return b.name
+        else:
+            raise click.ClickException(
+                "No Brains found with the given project")
+    return _default_brain()
+
+
 def _show_version():
     click.echo("bonsai_cli %s" % __version__)
 
 
-@click.group(invoke_without_command=True)
+@click.group()
 @click.option('--debug/--no-debug', default=False,
               help='Enable/disable verbose debugging output.')
-@click.option('--version', is_flag=True,
-              help='Show the program version and exit.')
-@click.pass_context
-def cli(ctx, debug, version):
+@click.version_option(version=__version__)
+def cli(debug):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
     """
     log_level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=log_level)
-
-    if ctx.invoked_subcommand is None:
-        if version:
-            _show_version()
-        else:
-            click.echo(ctx.get_help())
 
 
 @click.group()
@@ -229,12 +244,16 @@ def brain_create_server(brain_name):
 
 @click.command("create")
 @click.argument("brain_name")
-def brain_create_local(brain_name):
+@click.option("--project",
+              help='Override to target another project directory.')
+def brain_create_local(brain_name, project):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
 
     brain_create_server(brain_name)
 
-    db = DotBrains()
+    bproj = ProjectFile.from_file_or_dir(project) if project else ProjectFile()
+
+    db = DotBrains(bproj.directory())
     brain = db.find(brain_name)
     if brain is None:
         click.echo("Adding {} to '.brains', ".format(brain_name), nl=False)
@@ -243,42 +262,57 @@ def brain_create_local(brain_name):
     else:
         db.set_default(brain)
         click.echo("Brain {} is in '.brains'.".format(brain_name))
+
+    ProjectDefault.apply(bproj)
+    bproj.save()
+    click.echo("Saving project file, saved.")
     click.echo("")
     click.echo("Run 'bonsai load' to load inkling and "
                "training sources into {}.".format(brain_name))
 
 
 @click.command("load")
-@click.option("--brain", default=_default_brain,
+@click.option("--brain",
               help="Override to target another BRAIN.")
-@click.argument("inkling_file")
-def brain_load(brain, inkling_file):
-    """Loads an inkling file into the default BRAIN in .brains."""
+@click.option("--project",
+              help='Override to target another project directory.')
+def brain_load(brain, project):
+    """Loads an inkling file into the given BRAIN."""
 
+    brain = _brain_fallback(brain, project)
+    bproj = ProjectFile.from_file_or_dir(project) if project else ProjectFile()
     inkling_content = None
     try:
+        inkling_path = bproj.inkling_file
+        inkling_path = os.path.join(bproj.directory(), inkling_path)
+    except ProjectFileInvalidError as e:
+        _raise_as_click_exception("Inkling Path Lookup", e)
+
+    try:
         # we could check if the file path ends in .ink here
-        with open(inkling_file, 'r') as inkling_stream:
+        with open(inkling_path, 'r') as inkling_stream:
             inkling_content = inkling_stream.read()
     except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
         _raise_as_click_exception(
-            "Could not open '{}'".format(inkling_file), e)
+            "Could not open '{}'".format(inkling_path), e)
     except UnicodeDecodeError as e:
         _raise_as_click_exception(
-            "Could not read '{}', was it a .ink file?".format(inkling_file), e)
+            "Could not read '{}', was it a .ink file?".format(inkling_path), e)
 
     try:
         content = _api().load_inkling_into_brain(brain_name=brain,
                                                  inkling_code=inkling_content)
-        click.echo("Load request succeeded; a new brain version was created.")
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+
+    click.echo("Load request succeeded; a new brain version was created.")
+    try:
         click.echo("Connect simulators to {}{} for training".format(
             BonsaiConfig().brain_websocket_url(),
             content["simulator_connect_url"]))
     except KeyError:
-        click.echo("But missing the simulator connection path "
+        click.echo("But missing the simulator connection path in "
                    "the response.")
-    except BrainServerError as e:
-        _raise_as_click_exception(e)
 
 
 @click.group("train")
@@ -290,11 +324,14 @@ def brain_train():
 
 
 @click.command("list")
-@click.option("--brain", default=_default_brain,
+@click.option("--brain",
               help="Override to target another BRAIN.")
-def sims_list(brain):
+@click.option("--project",
+              help='Override to target another project directory.')
+def sims_list(brain, project):
     """List the simulators connected to the BRAIN server."""
 
+    brain = _brain_fallback(brain, project)
     try:
         content = _api().list_simulators(brain)
         rows = []
@@ -310,11 +347,14 @@ def sims_list(brain):
 
 
 @click.command("start")
-@click.option("--brain", default=_default_brain,
+@click.option("--brain",
               help="Override to target another BRAIN.")
-def brain_train_start(brain):
+@click.option("--project",
+              help='Override to target another project directory.')
+def brain_train_start(brain, project):
     """Trains the specified BRAIN."""
 
+    brain = _brain_fallback(brain, project)
     try:
         content = _api().start_training_brain(brain)
         click.echo(
@@ -329,13 +369,15 @@ def brain_train_start(brain):
 
 
 @click.command("status")
-@click.option("--brain", default=_default_brain,
-              help="Override to target another BRAIN.")
+@click.option("--brain", help="Override to target another BRAIN.")
 @click.option('--json', default=False, is_flag=True,
-              help='Output status as json')
-def brain_train_status(brain, json):
+              help='Output status as json.')
+@click.option("--project",
+              help='Override to target another project directory.')
+def brain_train_status(brain, json, project):
     """Gets training status on the specified BRAIN."""
 
+    brain = _brain_fallback(brain, project)
     status = None
     try:
         status = _api().get_brain_status(brain)
@@ -355,11 +397,14 @@ def brain_train_status(brain, json):
 
 
 @click.command("stop")
-@click.option("--brain", default=_default_brain,
+@click.option("--brain",
               help="Override to target another BRAIN.")
-def brain_train_stop(brain):
+@click.option("--project",
+              help='Override to target another project directory.')
+def brain_train_stop(brain, project):
     """Stops training on the specified BRAIN."""
 
+    brain = _brain_fallback(brain, project)
     try:
         _api().stop_training_brain(brain)
         click.echo("Stopped.")
