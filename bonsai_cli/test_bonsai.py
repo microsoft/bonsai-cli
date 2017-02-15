@@ -73,7 +73,7 @@ class TestMockedBrainCommand(TestCase):
 
         with self.runner.isolated_filesystem():
             pf = ProjectFile()
-            pf.inkling_file = 'some_file.ink'
+            pf.files.add('some_file.ink')
             open('some_file.ink', 'a').close()
             pf.save()
             self._add_config()
@@ -97,7 +97,7 @@ class TestMockedBrainCommand(TestCase):
     def test_brain_load_ink_file_not_found(self):
         with self.runner.isolated_filesystem():
             pf = ProjectFile()
-            pf.inkling_file = 'notfound.ink'
+            pf.files.add('notfound.ink')
             pf.save()
             self._add_config()
 

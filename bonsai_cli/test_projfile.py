@@ -25,8 +25,7 @@ class TestProjectFile(TestCase):
             open('one.ink', 'a').close()
             open('two.ink', 'a').close()
             pf = ProjectFile()
-            pf.files.add('./')
-            pf.inkling_file = 'two.ink'
+            pf.files.add('two.ink')
             self.assertEqual(pf.inkling_file, 'two.ink')
 
     def test_missing_inkling(self):

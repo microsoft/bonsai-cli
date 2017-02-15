@@ -49,7 +49,7 @@ class ProjectFile():
         try:
             with open(path, 'r') as f:
                 proj = json.load(f)
-        except FileNotFoundError:
+        except (OSError, IOError, ValueError):
             pass
         return proj
 
@@ -77,31 +77,25 @@ class ProjectFile():
 
             if os.path.isdir(merged):
                 for dirname, _, file_list in os.walk(merged):
-                    yield from (os.path.join(dirname, f) for f in file_list)
+                    for f in file_list:
+                        yield os.path.join(dirname, f)
             else:
                 yield path
 
     @property
     def inkling_file(self):
-        inkling_path = self.content.get('inkling_main', None)
-        if inkling_path:
-            return inkling_path
         inkling_files = [f for f in self._list_paths() if f.endswith('.ink')]
         if len(inkling_files) != 1:
             if len(inkling_files) == 0:
                 raise ProjectFileInvalidError('No inkling file found')
             raise ProjectFileInvalidError(
-                'Multiple inkling files found. Set "inkling_main" in the'
+                'Multiple inkling files found. Set one in "files" in the'
                 ' project file to indicate which should be loaded. '
                 '{},{}, ... {} total'.format(inkling_files[0],
                                              inkling_files[1],
                                              len(inkling_files)))
 
         return inkling_files[0]
-
-    @inkling_file.setter
-    def inkling_file(self, value):
-        self.content['inkling_main'] = value
 
     @property
     def files(self):
