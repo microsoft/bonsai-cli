@@ -213,6 +213,8 @@ def brain_list():
         _raise_as_click_exception(e)
 
 
+# This command is currently disabled,
+# brain_create_local is used instead.
 @click.command("create")
 @click.argument("brain_name")
 def brain_create(brain_name):
@@ -414,10 +416,11 @@ def brain_train_stop(brain, project):
 
 # Compose the commands defined above.
 # The top level commands: configure, sims and switch
-cli.add_command(brain)
 cli.add_command(configure)
 cli.add_command(sims)
 cli.add_command(switch)
+# T1666 - break out the actions of brain_create_local
+# cli.add_command(brain)
 
 # The brain commands: create, list, load, and train
 cli.add_command(brain_create_local)
@@ -426,6 +429,7 @@ cli.add_command(brain_load)
 cli.add_command(brain_train)
 
 # The brain sub commands: create
+# This is disabled in favor of brain_create_local.
 brain.add_command(brain_create)
 
 # This sims command has one sub command: list

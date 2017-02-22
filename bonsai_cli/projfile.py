@@ -65,6 +65,9 @@ class ProjectFile():
         """
         Lists all file paths referenced by 'files', with directories expanded
         """
+        # This logic is shared with the backend project's parsing
+        # of project files and functionality should be shared
+        # see T1643
         project_dir = os.path.abspath(self.directory())
         for path in self._file_set:
             # join paths relative to the project directory, otherwise
