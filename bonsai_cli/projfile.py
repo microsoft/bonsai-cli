@@ -55,7 +55,7 @@ class ProjectFile():
 
     def _write(self):
         output = self.content
-        output['files'] = list(self._file_set)
+        output['files'] = sorted(list(self._file_set))
         with open(self.project_path, 'w') as f:
             json.dump(output, f,
                       sort_keys=True, indent=4,

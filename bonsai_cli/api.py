@@ -1,12 +1,15 @@
 import logging
 
+import email
 import requests
 import requests.exceptions
+from requests.compat import unquote
 
 
 _VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
 _CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
+_GET_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
 _LOAD_INK_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/ink"
 _SIMS_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/sims"
 _STATUS_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/status"
@@ -133,6 +136,48 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    def _get_multipart(self, url):
+        """
+        Issues a GET request for a multipart/mixed response
+        and returns a dictionary of filename/data from the response.
+        :param url: The URL being GET from.
+        """
+        log.debug('GET from %s...', url)
+        headers = {
+            'Authorization': self._access_key,
+            "Accept": "multipart/mixed"
+        }
+        response = requests.get(url=url,
+                                headers=headers)
+        try:
+            response.raise_for_status()
+            log.debug('GET %s results:\n%s', url, response.text)
+
+            # combine response's headers/response so its parsable together
+            header_list = ["{}: {}".format(key, response.headers[key])
+                           for key in response.headers]
+            header_string = "\r\n".join(header_list)
+            message = "\r\n".join([header_string, response.text])
+
+            # email is kind of a misnomer for the package,
+            # it includes a lot of utilities and we're using
+            # it here to parse the multipart response,
+            # which the requests lib doesn't help with very much
+            parsed_message = email.message_from_string(message)
+
+            # create a filename/data dictionary
+            response = {}
+            for part in parsed_message.walk():
+                # make sure this part is a file
+                file_header = part.get_filename(failobj=None)
+                if file_header:
+                    filename = unquote(file_header)
+                    response[filename] = part.get_payload()
+
+            return response
+        except requests.exceptions.HTTPError as e:
+            _handle_and_raise(response, e)
+
     def validate(self):
         """
         Validates an access key. This is the only scenario in which user_name
@@ -198,6 +243,22 @@ class BonsaiAPI(object):
         )
         data = {"name": brain_name}
         return self._post(url=url, data=data)
+
+    def get_brain_files(self, brain_name):
+        """
+        Issues a command to the BRAIN backend to get all source files
+        for the given BRAIN. If the request fails, an exception is raised.
+        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
+        >>> bonsai_api.get_brain_files('cartpole')
+        :param brain_name: The name of the BRAIN
+        :param user_name: Override of class' user for the request
+        """
+        url = _GET_INFO_URL_TEMPLATE.format(
+            api_url=self._api_url,
+            username=self._user_name,
+            brain=brain_name
+        )
+        return self._get_multipart(url=url)
 
     def load_inkling_into_brain(self, brain_name, inkling_code):
         """

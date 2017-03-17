@@ -110,6 +110,24 @@ def _brain_fallback(brain, project):
     return _default_brain()
 
 
+def _add_or_default_brain(directory, brain_name):
+    """
+    Verifies that a .brains file exists for given brain_name.
+    Will create .brains file if it doesn't exist
+    :param directory: Path to check/create .brains at
+    :param brain_name: BRAIN name to set as default
+    """
+    db = DotBrains(directory)
+    brain = db.find(brain_name)
+    if brain is None:
+        click.echo("Adding {} to '.brains', ".format(brain_name), nl=False)
+        db.add(brain_name)
+        click.echo("added.")
+    else:
+        db.set_default(brain)
+        click.echo("Brain {} is in '.brains'.".format(brain_name))
+
+
 def _show_version():
     click.echo("bonsai_cli %s" % __version__)
 
@@ -140,8 +158,8 @@ def configure(key):
     if key:
         access_key = key
     else:
-        access_key_message = ("You can get this access key from your "
-                              "Account Settings page on the bonsai website")
+        access_key_message = ("You can get this access key from "
+                              "https://beta.bons.ai/accounts/key.")
         click.echo(access_key_message)
 
         access_key = click.prompt(
@@ -255,15 +273,7 @@ def brain_create_local(brain_name, project):
 
     bproj = ProjectFile.from_file_or_dir(project) if project else ProjectFile()
 
-    db = DotBrains(bproj.directory())
-    brain = db.find(brain_name)
-    if brain is None:
-        click.echo("Adding {} to '.brains', ".format(brain_name), nl=False)
-        db.add(brain_name)
-        click.echo("added.")
-    else:
-        db.set_default(brain)
-        click.echo("Brain {} is in '.brains'.".format(brain_name))
+    _add_or_default_brain(bproj.directory(), brain_name)
 
     ProjectDefault.apply(bproj)
     bproj.save()
@@ -315,6 +325,43 @@ def brain_load(brain, project):
     except KeyError:
         click.echo("But missing the simulator connection path in "
                    "the response.")
+
+
+@click.command("download")
+@click.argument("brain_name")
+def brain_download(brain_name):
+    """Downloads all the files related to a BRAIN."""
+
+    if os.path.exists(brain_name) and os.listdir(brain_name):
+        err_msg = ("Directory '{}' already exists and "
+                   "is not an empty directory".format(brain_name))
+        _raise_as_click_exception(err_msg)
+
+    try:
+        click.echo("Downloading files...")
+        files = _api().get_brain_files(brain_name=brain_name)
+        with click.progressbar(files,
+                               bar_template='%(label)s %(info)s',
+                               label="Saving files...",
+                               item_show_func=lambda x: x,
+                               show_eta=False,
+                               show_pos=True) as files_wrapper:
+            for filename in files_wrapper:
+                # respect directories
+                file_path = os.path.join(brain_name, filename)
+                dirname = os.path.dirname(file_path)
+                if dirname and not os.path.exists(dirname):
+                    os.makedirs(dirname)
+
+                with open(file_path, "w") as outfile:
+                    outfile.write(files[filename])
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+
+    _add_or_default_brain(brain_name, brain_name)
+
+    click.echo(("Download request succeeded. "
+                "Files saved to directory '{}'".format(brain_name)))
 
 
 @click.group("train")
@@ -422,9 +469,10 @@ cli.add_command(switch)
 # T1666 - break out the actions of brain_create_local
 # cli.add_command(brain)
 
-# The brain commands: create, list, load, and train
+# The brain commands: create, list, download, load, and train
 cli.add_command(brain_create_local)
 cli.add_command(brain_list)
+cli.add_command(brain_download)
 cli.add_command(brain_load)
 cli.add_command(brain_train)
 

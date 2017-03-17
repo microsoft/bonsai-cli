@@ -106,6 +106,29 @@ class TestMockedBrainCommand(TestCase):
 
         self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
 
+    def test_brain_download(self):
+        self.api.get_brain_files.return_value = {
+            'test.txt': '# test file 1',
+            'test2.txt': '# test file 2'
+        }
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            result = self.runner.invoke(
+                cli, ['download', 'mybrain'])
+
+            saved_files = os.listdir('mybrain')
+            self.assertIn('test.txt', saved_files)
+            self.assertIn('test2.txt', saved_files)
+
+            repeat_response = self.runner.invoke(
+                cli, ['download', 'mybrain'])
+
+        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        # should fail if directory/files already exist
+        self.assertEqual(repeat_response.exit_code, FAILURE_EXIT_CODE)
+
     def test_brain_create(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         with self.runner.isolated_filesystem():

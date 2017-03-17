@@ -67,3 +67,21 @@ class TestProjectFile(TestCase):
             all_paths = list(pf._list_paths())
             self.assertEqual(1, len(all_paths))
             self.assertIn('something.ink', all_paths)
+
+    def test_write_same_order_files(self):
+        with self.runner.isolated_filesystem():
+            pf1 = ProjectFile('test1.bproj')
+            files1 = set([str(i) + '.py' for i in range(1, 100)])
+            pf1.files.update(files1)
+            pf1.save()
+            with open(pf1.project_path, 'r') as f:
+                s1 = f.read()
+
+            pf2 = ProjectFile('test2.bproj')
+            files2 = set([str(i) + '.py' for i in reversed(range(1, 100))])
+            pf2.files.update(files2)
+            pf2.save()
+            with open(pf2.project_path, 'r') as f:
+                s2 = f.read()
+
+            self.assertEqual(s1, s2)
