@@ -81,6 +81,12 @@ class ProjectFile():
             if os.path.isdir(merged):
                 for dirname, _, file_list in os.walk(merged):
                     for f in file_list:
+                        # Don't include .brains, .gitignore, etc.
+                        if f.startswith("."):
+                            continue
+                        # Don't include project_file itself.
+                        if f == self.project_path:
+                            continue
                         yield os.path.join(dirname, f)
             else:
                 yield path

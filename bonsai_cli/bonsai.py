@@ -188,7 +188,7 @@ def configure(key):
 @click.argument("profile")
 @click.option("--url", default=None, help="Set the brain api url.")
 def switch(profile, url):
-    """Change the active configuration section. """
+    """Change the active configuration section."""
     bonsai_config = BonsaiConfig()
     bonsai_config.update(Profile=profile)
     if url:
@@ -205,7 +205,7 @@ def sims():
     pass
 
 
-@click.command("list")
+@click.command("list", short_help="Lists BRAINs owned by current user.")
 def brain_list():
     """Lists BRAINs owned by current user or by the user under a given
     URL.
@@ -240,7 +240,7 @@ def brain_create(brain_name):
     brain_create_server(brain_name)
 
 
-def brain_create_server(brain_name):
+def brain_create_server(brain_name, project_file):
     try:
         brain_list = _api().list_brains()
         brains = brain_list['brains']
@@ -254,7 +254,7 @@ def brain_create_server(brain_name):
     else:
         click.echo("Creating {}, ".format(brain_name), nl=False)
         try:
-            _api().create_brain(brain_name)
+            _api().create_brain(brain_name, project_file)
         except BrainServerError as e:
             click.echo("error:")
             _raise_as_click_exception(e)
@@ -262,16 +262,15 @@ def brain_create_server(brain_name):
             click.echo("created.")
 
 
-@click.command("create")
+@click.command("create",
+               short_help="Create a BRAIN and set the default BRAIN.")
 @click.argument("brain_name")
 @click.option("--project",
               help='Override to target another project directory.')
 def brain_create_local(brain_name, project):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
-
-    brain_create_server(brain_name)
-
     bproj = ProjectFile.from_file_or_dir(project) if project else ProjectFile()
+    brain_create_server(brain_name, bproj)
 
     _add_or_default_brain(bproj.directory(), brain_name)
 
@@ -364,7 +363,7 @@ def brain_download(brain_name):
                 "Files saved to directory '{}'".format(brain_name)))
 
 
-@click.group("train")
+@click.group("train", short_help="Start and stop training on a BRAIN.")
 def brain_train():
     """Start and stop training on a BRAIN, as well as get training
     status information.

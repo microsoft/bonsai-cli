@@ -5,6 +5,10 @@ import requests
 import requests.exceptions
 from requests.compat import unquote
 
+import os
+import json
+from requests.packages.urllib3.fields import RequestField
+from requests.packages.urllib3.filepost import encode_multipart_formdata
 
 _VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
@@ -103,6 +107,26 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    def _post_raw_data(self, url, data=None, headers=None):
+        """
+        Issues a POST request without encoding data argument.
+        :param url: The URL being posted to.
+        :param data: Any additional data to bundle with the POST, as raw data
+                     to be used as the body.
+        """
+        log.debug('POST raw data to %s ...', url)
+        headers_out = {'Authorization': self._access_key}
+        if headers:
+            headers_out.update(headers)
+        response = requests.post(url=url, headers=headers_out, data=data)
+
+        try:
+            response.raise_for_status()
+            log.debug('POST %s results:\n%s', url, response.text)
+            return _dict(response)
+        except requests.exceptions.HTTPError as e:
+            _handle_and_raise(response, e)
+
     def _put(self, url, data=None):
         """
         Issues a PUT request.
@@ -178,6 +202,42 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    def _post_multipart(self, url, json_dict, filesdata):
+        """ Issues a POST multipart/mixed request with leading application/json
+        part and subsequent file part(s).
+
+        :param url: url string
+        :param json: dictionary that will be json-encoded
+        :param filesdata: dict of <filename> -> <filedata>
+        """
+        # requests 1.13 does not have high-level support for multipart/mixed.
+        # Using lower-level modules to construct multipart/mixed per
+        # http://stackoverflow.com/questions/26299889/
+        # how-to-post-multipart-list-of-json-xml-files-using-python-requests
+        fields = []
+
+        # 1st part: application/json
+        rf = RequestField(name="project_data", data=json.dumps(json_dict))
+        rf.make_multipart(content_type='application/json')
+        fields.append(rf)
+
+        # Subsequent parts: file text
+        for filename, filedata in filesdata.items():
+            rf = RequestField(name=filename, data=filedata, filename=filename)
+            rf.make_multipart(content_disposition='attachment',
+                              content_type="text/plain")
+            fields.append(rf)
+
+        # Compose message
+        post_body, content_type = encode_multipart_formdata(fields)
+        # "multipart/form-data; boundary=.." -> "multipart/mixed; boundary=.."
+        content_type = content_type.replace("multipart/form-data",
+                                            "multipart/mixed",
+                                            1)
+
+        headers = {'Content-Type': content_type}
+        return self._post_raw_data(url, data=post_body, headers=headers)
+
     def validate(self):
         """
         Validates an access key. This is the only scenario in which user_name
@@ -227,7 +287,41 @@ class BonsaiAPI(object):
         )
         return self._get(url=url)
 
-    def create_brain(self, brain_name):
+    def _create_brain_from_bproj(self, url, brain_name, project_file):
+        # Get list of absolute/relative paths for project files.
+        abs_paths = []
+        rel_paths = []
+        proj_dir = project_file.directory()
+        for abs_path in project_file._list_paths():
+            abs_paths.append(abs_path)
+
+            rel_path = os.path.relpath(abs_path, proj_dir)
+            rel_paths.append(rel_path)
+
+        # Prepare application/json payload.
+        json_payload = {
+            "name": brain_name,
+            "description": "",
+            "project_file": {
+                "name": project_file.project_path,
+                "content": project_file.content
+            },
+            "project_accompanying_files": rel_paths
+        }
+
+        # { <filename_header> -> <file_data> }
+        filesdata = {}
+        for i in range(len(rel_paths)):
+            abs_path, rel_path = abs_paths[i], rel_paths[i]
+
+            f = open(abs_path, 'r')
+            filesdata[rel_path] = f.read()
+            f.close()
+
+        return self._post_multipart(url=url, json_dict=json_payload,
+                                    filesdata=filesdata)
+
+    def create_brain(self, brain_name, project_file=None):
         """
         Issues a command to the BRAIN backend to create a BRAIN for training
         and prediction purposes. If the request fails, an exception is raised.
@@ -241,8 +335,12 @@ class BonsaiAPI(object):
             api_url=self._api_url,
             username=self._user_name
         )
-        data = {"name": brain_name}
-        return self._post(url=url, data=data)
+
+        if project_file:
+            return self._create_brain_from_bproj(url, brain_name, project_file)
+        else:
+            data = {"name": brain_name}
+            return self._post(url=url, data=data)
 
     def get_brain_files(self, brain_name):
         """
