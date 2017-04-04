@@ -240,7 +240,7 @@ def brain_create(brain_name):
     brain_create_server(brain_name)
 
 
-def brain_create_server(brain_name, project_file):
+def brain_create_server(brain_name, project_file=None, project_type=None):
     try:
         brain_list = _api().list_brains()
         brains = brain_list['brains']
@@ -254,7 +254,13 @@ def brain_create_server(brain_name, project_file):
     else:
         click.echo("Creating {}, ".format(brain_name), nl=False)
         try:
-            _api().create_brain(brain_name, project_file)
+            if project_type:
+                _api().create_brain(brain_name,
+                                    project_type=project_type)
+            elif project_file:
+                _api().create_brain(brain_name, project_file=project_file)
+            else:
+                _api().create_brain(brain_name)
         except BrainServerError as e:
             click.echo("error:")
             _raise_as_click_exception(e)
@@ -262,15 +268,46 @@ def brain_create_server(brain_name, project_file):
             click.echo("created.")
 
 
+def _is_empty_dir(dir):
+    for file_or_dir in os.listdir(dir):
+        if file_or_dir.startswith("."):
+            # Omit .brains, .gitignore, etc.
+            pass
+        else:
+            return False
+    return True
+
+
 @click.command("create",
                short_help="Create a BRAIN and set the default BRAIN.")
 @click.argument("brain_name")
 @click.option("--project",
               help='Override to target another project directory.')
-def brain_create_local(brain_name, project):
+@click.option("--project-type",
+              help='Specify to download and use demo/starter project files')
+def brain_create_local(brain_name, project, project_type):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
-    bproj = ProjectFile.from_file_or_dir(project) if project else ProjectFile()
-    brain_create_server(brain_name, bproj)
+    if project_type:
+        # Create brain using project_type.
+
+        # Make sure clean directory before continuing.
+        cur_dir = os.getcwd()
+        if not _is_empty_dir(cur_dir):
+            message = ("Refusing to create and download project files using "
+                       "project-type in non-empty directory.  Please run in an"
+                       " empty directory.")
+            raise click.ClickException(message)
+
+        brain_create_server(brain_name, project_type=project_type)
+        _brain_download(brain_name, cur_dir)
+        bproj = ProjectFile.from_file_or_dir(cur_dir)
+    else:
+        # Create brain using project file.
+        if project:
+            bproj = ProjectFile.from_file_or_dir(project)
+        else:
+            bproj = ProjectFile()
+        brain_create_server(brain_name, project_file=bproj)
 
     _add_or_default_brain(bproj.directory(), brain_name)
 
@@ -330,10 +367,18 @@ def brain_load(brain, project):
 @click.argument("brain_name")
 def brain_download(brain_name):
     """Downloads all the files related to a BRAIN."""
+    _brain_download(brain_name, brain_name)
 
-    if os.path.exists(brain_name) and os.listdir(brain_name):
+    _add_or_default_brain(brain_name, brain_name)
+
+    click.echo(("Download request succeeded. "
+                "Files saved to directory '{}'".format(brain_name)))
+
+
+def _brain_download(brain_name, dest_dir):
+    if os.path.exists(dest_dir) and not _is_empty_dir(dest_dir):
         err_msg = ("Directory '{}' already exists and "
-                   "is not an empty directory".format(brain_name))
+                   "is not an empty directory".format(dest_dir))
         _raise_as_click_exception(err_msg)
 
     try:
@@ -347,7 +392,7 @@ def brain_download(brain_name):
                                show_pos=True) as files_wrapper:
             for filename in files_wrapper:
                 # respect directories
-                file_path = os.path.join(brain_name, filename)
+                file_path = os.path.join(dest_dir, filename)
                 dirname = os.path.dirname(file_path)
                 if dirname and not os.path.exists(dirname):
                     os.makedirs(dirname)
@@ -356,11 +401,6 @@ def brain_download(brain_name):
                     outfile.write(files[filename])
     except BrainServerError as e:
         _raise_as_click_exception(e)
-
-    _add_or_default_brain(brain_name, brain_name)
-
-    click.echo(("Download request succeeded. "
-                "Files saved to directory '{}'".format(brain_name)))
 
 
 @click.group("train", short_help="Start and stop training on a BRAIN.")

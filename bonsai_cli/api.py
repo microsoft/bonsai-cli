@@ -223,7 +223,8 @@ class BonsaiAPI(object):
 
         # Subsequent parts: file text
         for filename, filedata in filesdata.items():
-            rf = RequestField(name=filename, data=filedata, filename=filename)
+            rf = RequestField(name=filename, data=filedata, filename=filename,
+                              headers={'Content-Length': len(filedata)})
             rf.make_multipart(content_disposition='attachment',
                               content_type="text/plain")
             fields.append(rf)
@@ -314,14 +315,13 @@ class BonsaiAPI(object):
         for i in range(len(rel_paths)):
             abs_path, rel_path = abs_paths[i], rel_paths[i]
 
-            f = open(abs_path, 'r')
-            filesdata[rel_path] = f.read()
-            f.close()
+            with open(abs_path, 'rb') as f:
+                filesdata[rel_path] = f.read()
 
         return self._post_multipart(url=url, json_dict=json_payload,
                                     filesdata=filesdata)
 
-    def create_brain(self, brain_name, project_file=None):
+    def create_brain(self, brain_name, project_file=None, project_type=None):
         """
         Issues a command to the BRAIN backend to create a BRAIN for training
         and prediction purposes. If the request fails, an exception is raised.
@@ -335,8 +335,10 @@ class BonsaiAPI(object):
             api_url=self._api_url,
             username=self._user_name
         )
-
-        if project_file:
+        if project_type:
+            data = {"name": brain_name, "project_type": project_type}
+            return self._post(url=url, data=data)
+        elif project_file:
             return self._create_brain_from_bproj(url, brain_name, project_file)
         else:
             data = {"name": brain_name}

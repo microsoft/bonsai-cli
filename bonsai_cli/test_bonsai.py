@@ -164,6 +164,79 @@ class TestMockedBrainCommand(TestCase):
 
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
+    def test_brain_create_with_project_type(self):
+        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_files.return_value = {
+            'test.txt': '# test file 1',
+            'test2.txt': '# test file 2'
+        }
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            # Create brain using project-type arg.
+            args = ['create', 'mybrain']
+            args.extend(['--project-type', 'demos/cartpole'])
+            result = self.runner.invoke(cli, args)
+
+            # Check create brain network call occurred with expected args.
+            self.api.create_brain.assert_called_with(
+                "mybrain", project_type="demos/cartpole")
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # Check download step occurred.
+            saved_files = os.listdir('.')
+            self.assertIn('test.txt', saved_files)
+            self.assertIn('test2.txt', saved_files)
+
+    def test_brain_create_with_unknown_project_type(self):
+        # Mock create brain network call that returns error for
+        # unknown project_type values
+        def _mock_create_brain(brain, project_file=None, project_type=None):
+            if project_type and project_type not in (
+                    "templates/starter-project",
+                    "demos/mountain-car",
+                    "demos/cartpole"):
+                raise BrainServerError
+            else:
+                return {}
+
+        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.create_brain = Mock(return_value={},
+                                     side_effect=_mock_create_brain)
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            # Create brain using project-type arg
+            args = ['create', 'mybrain']
+            args.extend(['--project-type', 'unknown'])
+            result = self.runner.invoke(cli, args)
+
+            # Check create brain network call occurred with expected args.
+            self.api.create_brain.assert_called_with("mybrain",
+                                                     project_type="unknown")
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+
+    def test_brain_create_with_project_type_nonempty_directory(self):
+        self.api.list_brains = Mock(return_value={'brains': []})
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            # Make it nonempty.
+            os.mkdir('subfolder')
+
+            # Create brain using project-type arg
+            args = ['create', 'mybrain']
+            args.extend(['--project-type', 'demos/cartpole'])
+            result = self.runner.invoke(cli, args)
+
+            # Check expected message to user.
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue(result.output.startswith(
+                "Error: Refusing to create and download"))
+
     def test_brain_create_sets_default(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         with self.runner.isolated_filesystem():
