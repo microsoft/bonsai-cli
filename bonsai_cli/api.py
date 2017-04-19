@@ -13,9 +13,12 @@ from requests.packages.urllib3.filepost import encode_multipart_formdata
 _VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
 _CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
+_EDIT_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
 _GET_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
 _LOAD_INK_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/ink"
 _SIMS_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/sims"
+_SIMS_LOGS_URL_TEMPLATE = (
+    "{api_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs")
 _STATUS_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/status"
 _TRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/train"
 _STOP_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/stop"
@@ -118,11 +121,33 @@ class BonsaiAPI(object):
         headers_out = {'Authorization': self._access_key}
         if headers:
             headers_out.update(headers)
+
         response = requests.post(url=url, headers=headers_out, data=data)
 
         try:
             response.raise_for_status()
             log.debug('POST %s results:\n%s', url, response.text)
+            return _dict(response)
+        except requests.exceptions.HTTPError as e:
+            _handle_and_raise(response, e)
+
+    def _put_raw_data(self, url, data=None, headers=None):
+        """
+        Issues a POST request without encoding data argument.
+        :param url: The URL being posted to.
+        :param data: Any additional data to bundle with the POST, as raw data
+                     to be used as the body.
+        """
+        log.debug('PUT raw data to %s ...', url)
+        headers_out = {'Authorization': self._access_key}
+        if headers:
+            headers_out.update(headers)
+
+        response = requests.put(url=url, headers=headers_out, data=data)
+
+        try:
+            response.raise_for_status()
+            log.debug('PUT %s results:\n%s', url, response.text)
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -202,11 +227,12 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    def _post_multipart(self, url, json_dict, filesdata):
-        """ Issues a POST multipart/mixed request with leading application/json
-        part and subsequent file part(s).
+    def _compose_multipart(self, json_dict, filesdata):
+        """ Composes multipart/mixed request for create/edit brain.
 
-        :param url: url string
+        The multipart message is constructed as 1st part application/json and
+        subsequent file part(s).
+
         :param json: dictionary that will be json-encoded
         :param filesdata: dict of <filename> -> <filedata>
         """
@@ -230,14 +256,14 @@ class BonsaiAPI(object):
             fields.append(rf)
 
         # Compose message
-        post_body, content_type = encode_multipart_formdata(fields)
+        body, content_type = encode_multipart_formdata(fields)
         # "multipart/form-data; boundary=.." -> "multipart/mixed; boundary=.."
         content_type = content_type.replace("multipart/form-data",
                                             "multipart/mixed",
                                             1)
-
         headers = {'Content-Type': content_type}
-        return self._post_raw_data(url, data=post_body, headers=headers)
+
+        return (headers, body)
 
     def validate(self):
         """
@@ -288,16 +314,26 @@ class BonsaiAPI(object):
         )
         return self._get(url=url)
 
-    def _create_brain_from_bproj(self, url, brain_name, project_file):
+    def _create_brain_multipart(self, url, brain, project_file):
+        (payload, filesdata) = self._payload_create_brain(brain, project_file)
+
+        (headers, body) = self._compose_multipart(payload, filesdata)
+        return self._post_raw_data(url, data=body, headers=headers)
+
+    def _edit_brain_multipart(self, url, project_file):
+        (payload, filesdata) = self._payload_edit_brain(project_file)
+
+        (headers, body) = self._compose_multipart(payload, filesdata)
+        return self._put_raw_data(url, data=body, headers=headers)
+
+    def _payload_create_brain(self, brain_name, project_file):
         # Get list of absolute/relative paths for project files.
         abs_paths = []
         rel_paths = []
         proj_dir = project_file.directory()
-        for abs_path in project_file._list_paths():
-            abs_paths.append(abs_path)
-
-            rel_path = os.path.relpath(abs_path, proj_dir)
+        for rel_path in project_file._list_paths():
             rel_paths.append(rel_path)
+            abs_paths.append(os.path.join(proj_dir, rel_path))
 
         # Prepare application/json payload.
         json_payload = {
@@ -318,8 +354,14 @@ class BonsaiAPI(object):
             with open(abs_path, 'rb') as f:
                 filesdata[rel_path] = f.read()
 
-        return self._post_multipart(url=url, json_dict=json_payload,
-                                    filesdata=filesdata)
+        return (json_payload, filesdata)
+
+    def _payload_edit_brain(self, project_file):
+        # Construct edit brain json payload by re-using create brain payload
+        # since only difference is omission of name field.
+        (payload, filesdata) = self._payload_create_brain(None, project_file)
+        del payload["name"]
+        return (payload, filesdata)
 
     def create_brain(self, brain_name, project_file=None, project_type=None):
         """
@@ -339,10 +381,28 @@ class BonsaiAPI(object):
             data = {"name": brain_name, "project_type": project_type}
             return self._post(url=url, data=data)
         elif project_file:
-            return self._create_brain_from_bproj(url, brain_name, project_file)
+            return self._create_brain_multipart(url, brain_name, project_file)
         else:
             data = {"name": brain_name}
             return self._post(url=url, data=data)
+
+    def edit_brain(self, brain_name, project_file):
+        """
+        Issues a command to the BRAIN backend to edit a BRAIN's associated
+        file(s) and project file.
+        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
+        >>> bonsai_api.edit_brain('cartpole', ProjectFile())
+        :param brain_name: The name of the BRAIN
+        :param project_file: ProjectFile object
+        """
+        log.debug('Editing a brain named %s for %s',
+                  brain_name, self._user_name)
+        url = _EDIT_BRAIN_URL_TEMPLATE.format(
+            api_url=self._api_url,
+            username=self._user_name,
+            brain=brain_name
+        )
+        return self._edit_brain_multipart(url, project_file)
 
     def get_brain_files(self, brain_name):
         """
@@ -412,7 +472,30 @@ class BonsaiAPI(object):
         )
         return self._get(url=url)
 
-    def start_training_brain(self, brain_name):
+    def get_simulator_logs(self, brain_name, version, sim):
+        """
+        Get the logs for simulators registered with this BRAIN version. If the
+        request fails, an exception is raised.
+        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
+        >>> bonsai_api.get_simulator_logs('cartpole', 'latest', '1')
+        >>>
+        :param brain_name: The name of the BRAIN to get the simulator logs for
+        :param version: version of the BRAIN to get simulator logs for
+        :param sim: simulator identifier (currently defaults to 1)
+        :return: List of log lines.
+        """
+        log.debug('Getting simulator logs for BRAIN %s for %s, version=%s, '
+                  'sim=%s', brain_name, self._user_name, version, sim)
+        url = _SIMS_LOGS_URL_TEMPLATE.format(
+            api_url=self._api_url,
+            username=self._user_name,
+            brain=brain_name,
+            version=version,
+            sim=sim
+        )
+        return self._get(url=url)
+
+    def start_training_brain(self, brain_name, sim_local=True):
         """
         Starts training a BRAIN. Only BRAINs that aren't actively training or
         in the process of starting training or shutting down can be requested
@@ -423,12 +506,13 @@ class BonsaiAPI(object):
         """
         log.debug('Starting training for BRAIN %s for %s',
                   brain_name, self._user_name)
+        data = {} if sim_local else {'manage_simulator': True}
         url = _TRAIN_URL_TEMPLATE.format(
             api_url=self._api_url,
             username=self._user_name,
             brain=brain_name
         )
-        return self._put(url=url)
+        return self._put(url=url, data=data)
 
     def get_brain_status(self, brain_name):
         """

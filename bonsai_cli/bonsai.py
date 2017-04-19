@@ -255,8 +255,7 @@ def brain_create_server(brain_name, project_file=None, project_type=None):
         click.echo("Creating {}, ".format(brain_name), nl=False)
         try:
             if project_type:
-                _api().create_brain(brain_name,
-                                    project_type=project_type)
+                _api().create_brain(brain_name, project_type=project_type)
             elif project_file:
                 _api().create_brain(brain_name, project_file=project_file)
             else:
@@ -284,7 +283,8 @@ def _is_empty_dir(dir):
 @click.option("--project",
               help='Override to target another project directory.')
 @click.option("--project-type",
-              help='Specify to download and use demo/starter project files')
+              help='Specify to download and use demo/starter project files '
+                   '(i.e. "demos/cartpole")')
 def brain_create_local(brain_name, project, project_type):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
     if project_type:
@@ -307,6 +307,8 @@ def brain_create_local(brain_name, project, project_type):
             bproj = ProjectFile.from_file_or_dir(project)
         else:
             bproj = ProjectFile()
+        _validate_project_file(bproj)
+
         brain_create_server(brain_name, project_file=bproj)
 
     _add_or_default_brain(bproj.directory(), brain_name)
@@ -315,8 +317,51 @@ def brain_create_local(brain_name, project, project_type):
     bproj.save()
     click.echo("Saving project file, saved.")
     click.echo("")
-    click.echo("Run 'bonsai load' to load inkling and "
+    click.echo("Run 'bonsai push' to push inkling and "
                "training sources into {}.".format(brain_name))
+
+
+@click.command("push")
+@click.option("--brain",
+              help="Override to target another BRAIN.")
+@click.option("--project",
+              help="Override to target another project directory")
+def brain_push(brain, project):
+    """Uploads project file(s) to a BRAIN."""
+    brain = _brain_fallback(brain, project)
+    directory = project if project else os.getcwd()
+
+    # Load project file.
+    path = ProjectFile.find(directory)
+    logging.debug("Reading project file (%s)", path)
+    if not path:
+        message = ("Unable to locate project file (.bproj) in "
+                   "directory={}".format(directory))
+        raise click.ClickException(message)
+    bproj = ProjectFile(path=path)
+    _validate_project_file(bproj)
+
+    # Upload file(s) based on project file
+    files = list(bproj._list_paths()) + [bproj.project_path]
+    click.echo("Uploading {} file(s) to {}... ".format(len(files), brain))
+    logging.debug("Uploading files=%s", files)
+    try:
+        response = _api().edit_brain(brain, bproj)
+    except BrainServerError as e:
+        click.echo("error:")
+        _raise_as_click_exception(e)
+    else:
+        num_files = len(response["files"])
+        click.echo("Push succeeded.  {} updated with {} files".format(
+            brain, num_files))
+
+
+def _validate_project_file(project_file):
+    """ Sends error message to user if project file invalid. """
+    try:
+        project_file.validate_content()
+    except ProjectFileInvalidError as e:
+        _raise_as_click_exception(e)
 
 
 @click.command("load")
@@ -354,6 +399,8 @@ def brain_load(brain, project):
         _raise_as_click_exception(e)
 
     click.echo("Load request succeeded; a new brain version was created.")
+    click.echo("Note: 'bonsai load' has been deprecated.  Use `bonsai push` "
+               "instead.")
     try:
         click.echo("Connect simulators to {}{} for training".format(
             BonsaiConfig().brain_websocket_url(),
@@ -439,12 +486,13 @@ def sims_list(brain, project):
               help="Override to target another BRAIN.")
 @click.option("--project",
               help='Override to target another project directory.')
-def brain_train_start(brain, project):
+@click.option("--remote", 'sim_local', flag_value=False, default=True)
+def brain_train_start(brain, project, sim_local):
     """Trains the specified BRAIN."""
 
     brain = _brain_fallback(brain, project)
     try:
-        content = _api().start_training_brain(brain)
+        content = _api().start_training_brain(brain, sim_local)
         click.echo(
             "When training completes, connect simulators to {}{} "
             "for predictions".format(
@@ -500,6 +548,29 @@ def brain_train_stop(brain, project):
         _raise_as_click_exception(e)
 
 
+@click.command("log")
+@click.option("--brain",
+              help="Override to target another BRAIN.")
+@click.option("--project",
+              help='Override to target another project directory.')
+def brain_log(brain, project):
+    """Displays last 1000 lines of the running simulator's output."""
+    brain = _brain_fallback(brain, project)
+
+    # TODO: extend for multiple simulators
+    sims = ["1"]
+
+    try:
+        log_lines = []
+        for sim in sims:
+            result = _api().get_simulator_logs(brain, "latest", sim)
+            log_lines.extend(result)
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+
+    click.echo("\n".join(log_lines))
+
+
 # Compose the commands defined above.
 # The top level commands: configure, sims and switch
 cli.add_command(configure)
@@ -510,10 +581,12 @@ cli.add_command(switch)
 
 # The brain commands: create, list, download, load, and train
 cli.add_command(brain_create_local)
+cli.add_command(brain_push)
 cli.add_command(brain_list)
 cli.add_command(brain_download)
 cli.add_command(brain_load)
 cli.add_command(brain_train)
+cli.add_command(brain_log)
 
 # The brain sub commands: create
 # This is disabled in favor of brain_create_local.

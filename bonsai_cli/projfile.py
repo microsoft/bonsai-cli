@@ -37,6 +37,15 @@ class ProjectFile():
         else:
             return ProjectFile(os.path.join(file_or_dir, DEFAULT_FILE))
 
+    @staticmethod
+    def find(directory):
+        """ Returns path of 1st project file found given directory. """
+        path = os.path.join(directory, DEFAULT_FILE)
+        if os.path.exists(path):
+            return path
+        else:
+            return None
+
     def directory(self):
         dirname = os.path.dirname(self.project_path)
         return os.path.dirname(self.project_path)
@@ -63,7 +72,8 @@ class ProjectFile():
 
     def _list_paths(self):
         """
-        Lists all file paths referenced by 'files', with directories expanded
+        Lists all file paths (relative) referenced by 'files', with directories
+        expanded
         """
         # This logic is shared with the backend project's parsing
         # of project files and functionality should be shared
@@ -81,15 +91,35 @@ class ProjectFile():
             if os.path.isdir(merged):
                 for dirname, _, file_list in os.walk(merged):
                     for f in file_list:
-                        # Don't include .brains, .gitignore, etc.
-                        if f.startswith("."):
+                        if self._exclude_file(dirname, f):
                             continue
-                        # Don't include project_file itself.
-                        if f == self.project_path:
-                            continue
-                        yield os.path.join(dirname, f)
+
+                        abs_path = os.path.join(dirname, f)
+                        rel_path = os.path.relpath(abs_path, project_dir)
+                        yield rel_path
             else:
                 yield path
+
+    def _exclude_file(self, dirname, filename):
+        """ Returns True/False if file should be excluded as part of wildcard
+        expansion in _list_paths(). """
+        path = os.path.join(dirname, filename)
+
+        # Don't include project_file itself.
+        if (os.path.exists(self.project_path) and
+                os.path.samefile(path, self.project_path)):
+            return True
+
+        # .git/index, etc.
+        dirs_in_path = dirname.split('/')
+        if '.git' in dirs_in_path:
+            return True
+
+        # .brains, .gitignore, etc.
+        if filename.startswith('.'):
+            return True
+
+        return False
 
     @property
     def inkling_file(self):
@@ -119,3 +149,17 @@ class ProjectFile():
 
     def save(self):
         self._write()
+
+    def validate_content(self):
+        """ Checks project file contents for errors. """
+        # Checks "files" exist on disk.
+        if "files" in self.content:
+            dir = self.directory()
+            for filename in self.content["files"]:
+                path = os.path.join(dir, filename)
+                if not os.path.exists(path):
+                    msg = "Unable to find {}, as specified in {}".format(
+                        filename, self.project_path)
+                    raise ProjectFileInvalidError(msg)
+
+        return True
