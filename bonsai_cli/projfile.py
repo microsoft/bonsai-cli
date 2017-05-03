@@ -47,7 +47,6 @@ class ProjectFile():
             return None
 
     def directory(self):
-        dirname = os.path.dirname(self.project_path)
         return os.path.dirname(self.project_path)
 
     def exists(self):

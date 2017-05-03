@@ -548,7 +548,8 @@ def brain_train_stop(brain, project):
         _raise_as_click_exception(e)
 
 
-@click.command("log")
+@click.command("log",
+               short_help="Display logs from remote training.")
 @click.option("--brain",
               help="Override to target another BRAIN.")
 @click.option("--project",

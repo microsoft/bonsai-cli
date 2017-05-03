@@ -315,15 +315,15 @@ class BonsaiAPI(object):
         return self._get(url=url)
 
     def _create_brain_multipart(self, url, brain, project_file):
-        (payload, filesdata) = self._payload_create_brain(brain, project_file)
+        payload, filesdata = self._payload_create_brain(brain, project_file)
 
-        (headers, body) = self._compose_multipart(payload, filesdata)
+        headers, body = self._compose_multipart(payload, filesdata)
         return self._post_raw_data(url, data=body, headers=headers)
 
     def _edit_brain_multipart(self, url, project_file):
-        (payload, filesdata) = self._payload_edit_brain(project_file)
+        payload, filesdata = self._payload_edit_brain(project_file)
 
-        (headers, body) = self._compose_multipart(payload, filesdata)
+        headers, body = self._compose_multipart(payload, filesdata)
         return self._put_raw_data(url, data=body, headers=headers)
 
     def _payload_create_brain(self, brain_name, project_file):
@@ -332,15 +332,17 @@ class BonsaiAPI(object):
         rel_paths = []
         proj_dir = project_file.directory()
         for rel_path in project_file._list_paths():
+            abs_path = os.path.join(proj_dir, rel_path)
             rel_paths.append(rel_path)
-            abs_paths.append(os.path.join(proj_dir, rel_path))
+            abs_paths.append(abs_path)
 
         # Prepare application/json payload.
+        project_file_name = os.path.basename(project_file.project_path)
         json_payload = {
             "name": brain_name,
             "description": "",
             "project_file": {
-                "name": project_file.project_path,
+                "name": project_file_name,
                 "content": project_file.content
             },
             "project_accompanying_files": rel_paths
@@ -354,14 +356,14 @@ class BonsaiAPI(object):
             with open(abs_path, 'rb') as f:
                 filesdata[rel_path] = f.read()
 
-        return (json_payload, filesdata)
+        return json_payload, filesdata
 
     def _payload_edit_brain(self, project_file):
         # Construct edit brain json payload by re-using create brain payload
         # since only difference is omission of name field.
-        (payload, filesdata) = self._payload_create_brain(None, project_file)
+        payload, filesdata = self._payload_create_brain(None, project_file)
         del payload["name"]
-        return (payload, filesdata)
+        return payload, filesdata
 
     def create_brain(self, brain_name, project_file=None, project_type=None):
         """
