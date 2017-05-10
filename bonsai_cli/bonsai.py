@@ -284,7 +284,7 @@ def _is_empty_dir(dir):
               help='Override to target another project directory.')
 @click.option("--project-type",
               help='Specify to download and use demo/starter project files '
-                   '(i.e. "demos/cartpole")')
+                   '(e.g. "demos/cartpole").')
 def brain_create_local(brain_name, project, project_type):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
     if project_type:
@@ -486,7 +486,8 @@ def sims_list(brain, project):
               help="Override to target another BRAIN.")
 @click.option("--project",
               help='Override to target another project directory.')
-@click.option("--remote", 'sim_local', flag_value=False, default=True)
+@click.option("--remote", 'sim_local', flag_value=False, default=True,
+              help='Run a simulator remotely on Bonsai\'s servers.')
 def brain_train_start(brain, project, sim_local):
     """Trains the specified BRAIN."""
 
