@@ -73,7 +73,9 @@ def _api():
     _verify_required_configuration(bonsai_config)
     return BonsaiAPI(access_key=bonsai_config.access_key(),
                      user_name=bonsai_config.username(),
-                     api_url=bonsai_config.brain_api_url())
+                     api_url=bonsai_config.brain_api_url(),
+                     ws_url=bonsai_config.brain_websocket_url(),
+                     )
 
 
 def _default_brain():
@@ -364,52 +366,6 @@ def _validate_project_file(project_file):
         _raise_as_click_exception(e)
 
 
-@click.command("load")
-@click.option("--brain",
-              help="Override to target another BRAIN.")
-@click.option("--project",
-              help='Override to target another project directory.')
-def brain_load(brain, project):
-    """Loads an inkling file into the given BRAIN."""
-
-    brain = _brain_fallback(brain, project)
-    bproj = ProjectFile.from_file_or_dir(project) if project else ProjectFile()
-    inkling_content = None
-    try:
-        inkling_path = bproj.inkling_file
-        inkling_path = os.path.join(bproj.directory(), inkling_path)
-    except ProjectFileInvalidError as e:
-        _raise_as_click_exception("Inkling Path Lookup", e)
-
-    try:
-        # we could check if the file path ends in .ink here
-        with open(inkling_path, 'r') as inkling_stream:
-            inkling_content = inkling_stream.read()
-    except (FileNotFoundError, IsADirectoryError, PermissionError) as e:
-        _raise_as_click_exception(
-            "Could not open '{}'".format(inkling_path), e)
-    except UnicodeDecodeError as e:
-        _raise_as_click_exception(
-            "Could not read '{}', was it a .ink file?".format(inkling_path), e)
-
-    try:
-        content = _api().load_inkling_into_brain(brain_name=brain,
-                                                 inkling_code=inkling_content)
-    except BrainServerError as e:
-        _raise_as_click_exception(e)
-
-    click.echo("Load request succeeded; a new brain version was created.")
-    click.echo("Note: 'bonsai load' has been deprecated.  Use `bonsai push` "
-               "instead.")
-    try:
-        click.echo("Connect simulators to {}{} for training".format(
-            BonsaiConfig().brain_websocket_url(),
-            content["simulator_connect_url"]))
-    except KeyError:
-        click.echo("But missing the simulator connection path in "
-                   "the response.")
-
-
 @click.command("download")
 @click.argument("brain_name")
 def brain_download(brain_name):
@@ -555,22 +511,27 @@ def brain_train_stop(brain, project):
               help="Override to target another BRAIN.")
 @click.option("--project",
               help='Override to target another project directory.')
-def brain_log(brain, project):
+@click.option("--follow", is_flag=True,
+              help="Continually follow simulator's output.")
+def brain_log(brain, project, follow):
     """Displays last 1000 lines of the running simulator's output."""
     brain = _brain_fallback(brain, project)
 
     # TODO: extend for multiple simulators
     sims = ["1"]
 
-    try:
-        log_lines = []
-        for sim in sims:
-            result = _api().get_simulator_logs(brain, "latest", sim)
-            log_lines.extend(result)
-    except BrainServerError as e:
-        _raise_as_click_exception(e)
+    if follow:
+        _api().get_simulator_logs_stream(brain, "latest", sims[0])
+    else:
+        try:
+            log_lines = []
+            for sim in sims:
+                result = _api().get_simulator_logs(brain, "latest", sim)
+                log_lines.extend(result)
+        except BrainServerError as e:
+            _raise_as_click_exception(e)
 
-    click.echo("\n".join(log_lines))
+        click.echo("\n".join(log_lines))
 
 
 # Compose the commands defined above.
@@ -586,7 +547,6 @@ cli.add_command(brain_create_local)
 cli.add_command(brain_push)
 cli.add_command(brain_list)
 cli.add_command(brain_download)
-cli.add_command(brain_load)
 cli.add_command(brain_train)
 cli.add_command(brain_log)
 

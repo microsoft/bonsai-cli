@@ -1,5 +1,6 @@
 import logging
 
+import click
 import email
 import requests
 import requests.exceptions
@@ -9,16 +10,18 @@ import os
 import json
 from requests.packages.urllib3.fields import RequestField
 from requests.packages.urllib3.filepost import encode_multipart_formdata
+import websocket
 
 _VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
 _CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
 _EDIT_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
 _GET_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
-_LOAD_INK_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/ink"
 _SIMS_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/sims"
 _SIMS_LOGS_URL_TEMPLATE = (
     "{api_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs")
+_SIM_LOGS_STREAM_URL_TEMPLATE = (
+    "{ws_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs/ws")
 _STATUS_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/status"
 _TRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/train"
 _STOP_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/stop"
@@ -75,7 +78,7 @@ class BonsaiAPI(object):
     error, such as the failing response code and/or error message.
     """
 
-    def __init__(self, access_key, user_name, api_url):
+    def __init__(self, access_key, user_name, api_url, ws_url=None):
         """
         Initializes the API object.
         :param access_key: The access key for the user. This can be obtained
@@ -85,12 +88,15 @@ class BonsaiAPI(object):
                           access key. That is the only scenario in which
                           user_name may be None.
         :param api_url: The URL to for the BRAIN REST API.
+        :param ws_url: The websocket URL for the BRAIN API.
         """
         log.debug('Bootstrapping the Bonsai API for user: %s', user_name)
         self._access_key = access_key
         self._user_name = user_name
         self._api_url = api_url
+        self._ws_url = ws_url
         log.debug('API URL = %s', self._api_url)
+        log.debug('WS URL = %s', self._ws_url)
 
     def _post(self, url, data=None):
         """
@@ -265,6 +271,21 @@ class BonsaiAPI(object):
 
         return (headers, body)
 
+    def get_simulator_logs_stream(self, brain_name, version, sim):
+        log.debug('Getting simulator logs follow for BRAIN %s for %s, '
+                  'version=%s, sim=%s', brain_name, self._user_name, version,
+                  sim)
+        ws_url = _SIM_LOGS_STREAM_URL_TEMPLATE.format(
+            ws_url=self._ws_url,
+            username=self._user_name,
+            brain=brain_name,
+            version=version,
+            sim=sim
+        )
+
+        handler = LogStreamHandler(ws_url, self._access_key)
+        handler.run()
+
     def validate(self):
         """
         Validates an access key. This is the only scenario in which user_name
@@ -422,28 +443,6 @@ class BonsaiAPI(object):
         )
         return self._get_multipart(url=url)
 
-    def load_inkling_into_brain(self, brain_name, inkling_code):
-        """
-        Issues a command to the BRAIN to load the provided Inkling code into
-        the BRAIN. If the request fails, for example, due to a failure to
-        compile the Inkling code, an exception is raised.
-        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
-        >>> inkling_code = '(Inkling code goes here)'
-        >>> bonsai_api.load_inkling_into_brain(brain_name='foo',
-        >>>                                    inkling_code=inkling_code)
-        :param brain_name: The name of the BRAIN to load Inkling into.
-        :param inkling_code: The Inkling code to load into the BRAIN.
-        """
-        log.debug('Loading BRAIN %s with Inkling:\n%s',
-                  brain_name, inkling_code)
-        url = _LOAD_INK_URL_TEMPLATE.format(
-            api_url=self._api_url,
-            username=self._user_name,
-            brain=brain_name
-        )
-        data = {"ink_content": inkling_code}
-        return self._post(url=url, data=data)
-
     def list_simulators(self, brain_name):
         """
         Lists the simulators registered with this BRAIN. If the request fails,
@@ -557,3 +556,45 @@ class BonsaiAPI(object):
             brain=brain_name
         )
         return self._put(url=url)
+
+
+class LogStreamHandler(object):
+
+    def __init__(self, ws_url, access_key):
+        self._ws_url = ws_url
+        self._access_key = access_key
+
+    def run(self):
+        ws = websocket.WebSocketApp(
+            self._ws_url,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=LogStreamHandler.on_close,
+            header=['Authorization: {}'.format(self._access_key)]
+        )
+        ws.on_open = self._on_open
+        log.debug("Starting websocket connection for bonsai log --follow...")
+        try:
+            ws.run_forever()
+        except KeyboardInterrupt as e:
+            log.debug("Handling user Ctrl+C")
+
+    def _on_message(self, ws, message):
+        click.echo(message, nl=False)
+
+    def _on_error(self, ws, error):
+        if type(error) == KeyboardInterrupt:
+            log.debug("Handling Ctrl+c ...")
+            return
+        click.echo("Error received for '{}': '{}'".format(self._ws_url, error))
+
+    @staticmethod
+    def on_close(ws, code, reason):
+        log.debug("on_close()")
+        if code is None or code == 1000:
+            return
+
+        click.echo("(code={}) {}".format(code, reason))
+
+    def _on_open(self, ws):
+        log.debug("_on_open()")

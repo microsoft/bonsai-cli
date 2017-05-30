@@ -43,6 +43,7 @@ setup(
         'requests>=2.11',
         'tabulate>=0.7.5',
         'bonsai_config>=0.4.0',
+        'websocket-client>=0.40.0',
     ],
     packages=find_packages(),
     entry_points={

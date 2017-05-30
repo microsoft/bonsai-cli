@@ -67,45 +67,6 @@ class TestMockedBrainCommand(TestCase):
         config = BonsaiConfig()
         config.update_access_key_and_username(ACCESS_KEY, USERNAME)
 
-    def test_brain_load(self):
-        self.api.load_inkling_into_brain.return_value = {
-            'simulator_connect_url': '/url'}
-
-        with self.runner.isolated_filesystem():
-            pf = ProjectFile()
-            pf.files.add('some_file.ink')
-            open('some_file.ink', 'a').close()
-            pf.save()
-            self._add_config()
-
-            result = self.runner.invoke(
-                cli, ['load', '--brain', 'mybrain'])
-
-        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-        self.api.load_inkling_into_brain.assert_called_with(
-            brain_name='mybrain', inkling_code='')
-
-    def test_brain_load_ink_file_not_set(self):
-        with self.runner.isolated_filesystem():
-            self._add_config()
-            result = self.runner.invoke(
-                cli, ['load', '--brain', 'mybrain'])
-
-        self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
-        self.assertIn('No inkling file found', result.output)
-
-    def test_brain_load_ink_file_not_found(self):
-        with self.runner.isolated_filesystem():
-            pf = ProjectFile()
-            pf.files.add('notfound.ink')
-            pf.save()
-            self._add_config()
-
-            result = self.runner.invoke(
-                cli, ['load', '--brain', 'mybrain'])
-
-        self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
-
     def test_brain_download(self):
         self.api.get_brain_files.return_value = {
             'test.txt': '# test file 1',
