@@ -5,6 +5,10 @@
 - Add the `--follow` flag to the `bonsai log` command.
 - Add this changelog file.
 
+### Removed
+- Remove the `bonsai load` command. The `bonsai push` command should be
+used instead.
+
 ## 0.8.9
 ### Removed
 - Remove nose2 config file.
