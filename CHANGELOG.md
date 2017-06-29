@@ -3,6 +3,8 @@
 ## 0.8.10
 ### Added
 - Add the `--follow` flag to the `bonsai log` command.
+- Add dependency on the 'websocket-client' pip package to support the
+new `--follow` flag.
 - Add this changelog file.
 
 ### Removed
@@ -102,6 +104,9 @@ path instead of a path relative to the project root.
 a bonsai config file.
 - Add the `--json` flag to the `bonsai train status` command.
 - Add the `--key` flag to the `bonsai configure` command.
+
+### Changed
+- Increase the minimum required version of bonsai-config to 0.4.0.
 
 ## 0.5.1
 ### Changed
