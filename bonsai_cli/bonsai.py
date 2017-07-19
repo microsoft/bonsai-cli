@@ -531,7 +531,8 @@ def brain_log(brain, project, follow):
         except BrainServerError as e:
             _raise_as_click_exception(e)
 
-        click.echo("\n".join(log_lines))
+        for l in log_lines:
+            click.echo(l)
 
 
 # Compose the commands defined above.

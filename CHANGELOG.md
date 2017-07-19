@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.11
+### Fixed
+- Fix `bonsai log` truncation on windows
+
 ## 0.8.10
 ### Added
 - Add the `--follow` flag to the `bonsai log` command.
