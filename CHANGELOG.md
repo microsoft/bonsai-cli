@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.12
+### Changed
+- Simplify pytest settings
+
 ## 0.8.11
 ### Fixed
 - Fix `bonsai log` truncation on windows
