@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.13
+### Changed
+- Changed the web endpoint for access key retrieval
+
 ## 0.8.12
 ### Changed
 - Simplify pytest settings

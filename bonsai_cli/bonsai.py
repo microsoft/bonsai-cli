@@ -161,7 +161,7 @@ def configure(key):
         access_key = key
     else:
         access_key_message = ("You can get this access key from "
-                              "https://beta.bons.ai/accounts/key.")
+                              "https://beta.bons.ai/accounts/settings/key.")
         click.echo(access_key_message)
 
         access_key = click.prompt(
