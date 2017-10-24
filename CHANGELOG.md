@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.14
+### Added
+- Add tests for bonsai configure
+
 ## 0.8.13
 ### Changed
 - Changed the web endpoint for access key retrieval

@@ -15,6 +15,8 @@ from bonsai_config import BonsaiConfig
 
 SUCCESS_EXIT_CODE = 0
 FAILURE_EXIT_CODE = 1
+ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
+USERNAME = 'admin'
 
 
 def _print_result(result):
@@ -265,6 +267,47 @@ class TestMockedBrainCommand(TestCase):
         for f in expected_files_list:
             self.assertTrue(f in payload["project_accompanying_files"],
                             "f={} project_accompanying_files field".format(f))
+
+    @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
+    def test_bonsai_configure(self, validate_mock):
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # Run `bonsai configure`
+            result = self.runner.invoke(cli, ['configure'], input=ACCESS_KEY)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # Check ~/.bonsai
+            with open(path, 'r') as f:
+                result = f.read()
+                lines = result.split("\n")
+
+                self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
+                self.assertTrue("url = https://api.bons.ai" in lines)
+                self.assertTrue("username = {}".format(USERNAME) in lines)
+
+    @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
+    def test_bonsai_configure_key_option(self, validate_mock):
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # Run `bonsai configure --key <some_key>`
+            result = self.runner.invoke(cli,
+                                        ['configure', '--key', ACCESS_KEY])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # Check ~/.bonsai
+            with open(path, 'r') as f:
+                result = f.read()
+                lines = result.split("\n")
+
+                self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
+                self.assertTrue("url = https://api.bons.ai" in lines)
+                self.assertTrue("username = {}".format(USERNAME) in lines)
 
     def test_brain_push(self):
         """ Tests `bonsai push` """
