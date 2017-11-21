@@ -71,8 +71,8 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_download(self):
         self.api.get_brain_files.return_value = {
-            'test.txt': '# test file 1',
-            'test2.txt': '# test file 2'
+            'test.txt': b'# test file 1',
+            'test2.txt': b'# test file 2'
         }
 
         with self.runner.isolated_filesystem():
@@ -104,6 +104,8 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
             # Both already exist
+            open('test.ink', 'a').close()
+            open('test_simulator.py', 'a').close()
             brain_set = {'brains': [{'name': 'mybrain'}]}
             self.api.list_brains = Mock(return_value=brain_set)
             result = self.runner.invoke(
@@ -186,8 +188,8 @@ class TestMockedBrainCommand(TestCase):
     def test_brain_create_with_project_type(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         self.api.get_brain_files.return_value = {
-            'test.txt': '# test file 1',
-            'test2.txt': '# test file 2'
+            'test.txt': b'# test file 1',
+            'test2.txt': b'# test file 2'
         }
 
         with self.runner.isolated_filesystem():
@@ -308,6 +310,56 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = https://api.bons.ai" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
+
+    def test_brain_list_with_dotbrains(self):
+        brains = [
+            {"name": "brain_a", "state": "Stopped"},
+            {"name": "brain_b", "state": "Not Started"}
+        ]
+        self.api.list_brains = Mock(return_value={"brains": brains})
+
+        with self.runner.isolated_filesystem():
+            db = DotBrains()
+            db.add('brain_a')
+            db.add('brain_b')
+            # Run `bonsai list`
+            result = self.runner.invoke(cli, ['list'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # Convert table string into list of lists
+            # i.e. "brain_b  Not Started" -> ["brain_b", "Not Started"]
+            table_string = result.output
+            table_lines = table_string.split("\n")
+            brain_lines = [l.split(sep=None, maxsplit=2)
+                           for l in table_lines if "brain_" in l]
+
+            # Check values. Note that the default brain is marked
+            # NB: DotBrains defines the default brain as the last added
+            self.assertEqual(brain_lines[0], ["brain_a", "Stopped"])
+            self.assertEqual(brain_lines[1], ["->", "brain_b", "Not Started"])
+
+    def test_brain_list_no_dotbrains(self):
+        brains = [
+            {"name": "brain_a", "state": "Stopped"},
+            {"name": "brain_b", "state": "Not Started"}
+        ]
+        self.api.list_brains = Mock(return_value={"brains": brains})
+
+        with self.runner.isolated_filesystem():
+            # Run `bonsai list`
+            result = self.runner.invoke(cli, ['list'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # Convert table string into list of lists
+            # i.e. "brain_b  Not Started" -> ["brain_b", "Not Started"]
+            table_string = result.output
+            table_lines = table_string.split("\n")
+            brain_lines = [l.split(sep=None, maxsplit=1)
+                           for l in table_lines if "brain_" in l]
+
+            # Check values. No default brain is marked
+            self.assertEqual(brain_lines[0], ["brain_a", "Stopped"])
+            self.assertEqual(brain_lines[1], ["brain_b", "Not Started"])
 
     def test_brain_push(self):
         """ Tests `bonsai push` """
@@ -433,7 +485,9 @@ class TestMockedBrainCommand(TestCase):
             result = self.runner.invoke(cli, ['log'])
             self.api.get_simulator_logs.assert_called_with(
                 "mybrain", "latest", "1")
-            self.assertEqual(result.output, 'line1\nline2\n', result.output)
+            self.assertEqual(result.output,
+                             'Simulator logs for mybrain:\nline1\nline2\n',
+                             result.output)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
 
     def test_train_start(self):

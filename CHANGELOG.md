@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+### Changed
+- API client code to upload project files with MIME type `application/octet-stream`
+- Default project file to include both `.ink` and `.py` files
+
+## 0.8.15
+### Added
+- Better error reporting for connection errors and redirects
+- Additional output messages regarding default BRAIN
+- Changed user message
+- Allows for Unix-style globbing in project file file lists
+- Allows http_proxy, https_proxy and all_proxy to configure websockets
+
+### Changed
+- Default project file to include only `.ink` files
+
 ## 0.8.14
 ### Added
 - Add tests for bonsai configure
@@ -111,7 +127,7 @@ path instead of a path relative to the project root.
   specifying the name of the brain is now optional with the `--brain` flag.
 - The `bonsai create` command sets the specified brain name as default.
 - Many other commands that used to require the brain name have been changed
-  to allow specifying the brain name optionally using the `--brain` flag, 
+  to allow specifying the brain name optionally using the `--brain` flag,
   such as the `bonsai sims` command.
 
 ## 0.5.2

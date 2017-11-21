@@ -59,6 +59,7 @@ class TestProjectFile(TestCase):
             os.mkdir('sub')
             os.mkdir('sub/sub2')
             os.mkdir('sub/sub3')
+            open('sub/sub3/something.ink', 'a').close()
             pf = ProjectFile('sub/sub3/test.bproj')
             pf.files.add('./')
             pf.files.add('something.ink')
@@ -103,3 +104,73 @@ class TestProjectFile(TestCase):
             self.assertTrue('one.txt' not in filenames)
             self.assertTrue('two.txt' in filenames)
             self.assertTrue('three.txt' in filenames)
+
+    def test_inkling_glob(self):
+        with self.runner.isolated_filesystem():
+            open('something.ink', 'a').close()
+
+            pf = ProjectFile('test.bproj')
+            pf.files.add('*.ink')
+
+            all_paths = list(pf._list_paths())
+            self.assertEqual(1, len(all_paths))
+            self.assertIn('something.ink', all_paths)
+
+    def test_recursive_glob(self):
+        with self.runner.isolated_filesystem():
+            os.mkdir('sub')
+            open('something.ink', 'a').close()
+            open('sub/somethingelse.py', 'a').close()
+            open('sub/somethingunrelated.gif', 'a').close()
+
+            pf = ProjectFile('test.bproj')
+            pf.files.add('*.ink')
+            pf.files.add('**/*.py')
+
+            all_paths = [os.path.basename(p) for p in list(pf._list_paths())]
+            self.assertEqual(2, len(all_paths))
+            self.assertIn('something.ink', all_paths)
+            self.assertIn('somethingelse.py', all_paths)
+            self.assertNotIn('somethingunrelated.gif', all_paths)
+
+    def test_glob_specified(self):
+        with self.runner.isolated_filesystem():
+            os.mkdir('sub')
+            open('something.ink', 'a').close()
+            open('sub/somethingelse.py', 'a').close()
+            open('sub/one.txt', 'a').close()
+            open('sub/two.txt', 'a').close()
+
+            pf = ProjectFile('test.bproj')
+            pf.files.add('*.ink')
+            pf.files.add('sub/*.py')
+            pf.files.add('sub/one.txt')
+
+            all_paths = [os.path.basename(p) for p in list(pf._list_paths())]
+            self.assertEqual(3, len(all_paths))
+            self.assertIn('something.ink', all_paths)
+            self.assertIn('somethingelse.py', all_paths)
+            self.assertIn('one.txt', all_paths)
+            self.assertNotIn('two.txt', all_paths)
+
+    def test_glob_advanced(self):
+        with self.runner.isolated_filesystem():
+            open('something.txt', 'a').close()
+            open('something0.txt', 'a').close()
+            open('something1.csv', 'a').close()
+            open('something23.py', 'a').close()
+            open('something24.py', 'a').close()
+            open('something25.py', 'a').close()
+
+            pf = ProjectFile('test.bproj')
+            pf.files.add('something?.*')
+            pf.files.add('something2[3-4].py')
+
+            all_paths = [os.path.basename(p) for p in list(pf._list_paths())]
+            self.assertEqual(4, len(all_paths))
+            self.assertIn('something0.txt', all_paths)
+            self.assertIn('something1.csv', all_paths)
+            self.assertIn('something23.py', all_paths)
+            self.assertIn('something24.py', all_paths)
+            self.assertNotIn('something.txt', all_paths)
+            self.assertNotIn('something25.py', all_paths)

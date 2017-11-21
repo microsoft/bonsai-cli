@@ -11,6 +11,7 @@ import json
 from requests.packages.urllib3.fields import RequestField
 from requests.packages.urllib3.filepost import encode_multipart_formdata
 import websocket
+import functools
 
 _VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
@@ -49,6 +50,24 @@ def _handle_and_raise(response, e):
     except:
         message = 'Request failed.'
     raise BrainServerError('{}\n{}'.format(e, message))
+
+
+def _handles_connection_error(func):
+    """
+    Decorator for handling ConnectionErrors raised by the requests
+    library, raises a BrainServerError instead.
+
+    :param func: the function being decorated
+    """
+    @functools.wraps(func)
+    def _handler(self, url, *args, **kwargs):
+        try:
+            return func(self, url, *args, **kwargs)
+        except requests.exceptions.ConnectionError as e:
+            message = "Unable to connect to domain: {}".format(url)
+            raise BrainServerError(message)
+
+    return _handler
 
 
 def _dict(response):
@@ -98,6 +117,7 @@ class BonsaiAPI(object):
         log.debug('API URL = %s', self._api_url)
         log.debug('WS URL = %s', self._ws_url)
 
+    @_handles_connection_error
     def _post(self, url, data=None):
         """
         Issues a POST request.
@@ -108,14 +128,17 @@ class BonsaiAPI(object):
         log.debug('POST to %s with data %s...', url, str(data))
         response = requests.post(url=url,
                                  headers={'Authorization': self._access_key},
-                                 json=data)
+                                 json=data,
+                                 allow_redirects=False)
         try:
             response.raise_for_status()
+            self._raise_on_redirect(response)
             log.debug('POST %s results:\n%s', url, response.text)
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    @_handles_connection_error
     def _post_raw_data(self, url, data=None, headers=None):
         """
         Issues a POST request without encoding data argument.
@@ -128,15 +151,20 @@ class BonsaiAPI(object):
         if headers:
             headers_out.update(headers)
 
-        response = requests.post(url=url, headers=headers_out, data=data)
+        response = requests.post(url=url,
+                                 headers=headers_out,
+                                 data=data,
+                                 allow_redirects=False)
 
         try:
             response.raise_for_status()
+            self._raise_on_redirect(response)
             log.debug('POST %s results:\n%s', url, response.text)
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    @_handles_connection_error
     def _put_raw_data(self, url, data=None, headers=None):
         """
         Issues a POST request without encoding data argument.
@@ -149,15 +177,20 @@ class BonsaiAPI(object):
         if headers:
             headers_out.update(headers)
 
-        response = requests.put(url=url, headers=headers_out, data=data)
+        response = requests.put(url=url,
+                                headers=headers_out,
+                                data=data,
+                                allow_redirects=False)
 
         try:
             response.raise_for_status()
+            self._raise_on_redirect(response)
             log.debug('PUT %s results:\n%s', url, response.text)
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    @_handles_connection_error
     def _put(self, url, data=None):
         """
         Issues a PUT request.
@@ -168,14 +201,17 @@ class BonsaiAPI(object):
         log.debug('PUT to %s with data %s...', url, str(data))
         response = requests.put(url=url,
                                 headers={'Authorization': self._access_key},
-                                json=data)
+                                json=data,
+                                allow_redirects=False)
         try:
             response.raise_for_status()
+            self._raise_on_redirect(response)
             log.debug('PUT %s results:\n%s', url, response.text)
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    @_handles_connection_error
     def _get(self, url):
         """
         Issues a GET request.
@@ -191,6 +227,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    @_handles_connection_error
     def _get_multipart(self, url):
         """
         Issues a GET request for a multipart/mixed response
@@ -200,7 +237,8 @@ class BonsaiAPI(object):
         log.debug('GET from %s...', url)
         headers = {
             'Authorization': self._access_key,
-            "Accept": "multipart/mixed"
+            "Accept": "multipart/mixed",
+            'Accept-Encoding': 'base64'
         }
         response = requests.get(url=url,
                                 headers=headers)
@@ -212,7 +250,7 @@ class BonsaiAPI(object):
             header_list = ["{}: {}".format(key, response.headers[key])
                            for key in response.headers]
             header_string = "\r\n".join(header_list)
-            message = "\r\n".join([header_string, response.text])
+            message = "\r\n\r\n".join([header_string, response.text])
 
             # email is kind of a misnomer for the package,
             # it includes a lot of utilities and we're using
@@ -227,7 +265,7 @@ class BonsaiAPI(object):
                 file_header = part.get_filename(failobj=None)
                 if file_header:
                     filename = unquote(file_header)
-                    response[filename] = part.get_payload()
+                    response[filename] = part.get_payload(decode=True)
 
             return response
         except requests.exceptions.HTTPError as e:
@@ -258,7 +296,7 @@ class BonsaiAPI(object):
             rf = RequestField(name=filename, data=filedata, filename=filename,
                               headers={'Content-Length': len(filedata)})
             rf.make_multipart(content_disposition='attachment',
-                              content_type="text/plain")
+                              content_type="application/octet-stream")
             fields.append(rf)
 
         # Compose message
@@ -270,6 +308,20 @@ class BonsaiAPI(object):
         headers = {'Content-Type': content_type}
 
         return (headers, body)
+
+    def _raise_on_redirect(self, response):
+        """ Raises an HTTPError if the response is 301.
+
+        Substitute a helpful error message for the often confusing errors
+        produced by default redirect logic.
+
+        :param response: requests.Response object to be processed
+        """
+        if (response.status_code == 301):
+            raise requests.exceptions.HTTPError(
+                "{} Moved Permanently: Likely misconfigured url: {}".format(
+                    response.status_code, self._api_url)
+            )
 
     def get_simulator_logs_stream(self, brain_name, version, sim):
         log.debug('Getting simulator logs follow for BRAIN %s for %s, '
@@ -574,10 +626,32 @@ class LogStreamHandler(object):
         )
         ws.on_open = self._on_open
         log.debug("Starting websocket connection for bonsai log --follow...")
+
+        proxy = self._get_proxy()
+        log.debug('proxy: %s', proxy)
+
         try:
-            ws.run_forever()
+            ws.run_forever(**proxy)
         except KeyboardInterrupt as e:
             log.debug("Handling user Ctrl+C")
+
+    def _get_proxy(self):
+        if self._ws_url.startswith('wss'):
+            server = os.getenv('https_proxy')
+        else:
+            server = os.getenv('http_proxy')
+
+        if server is None:
+            server = os.getenv('all_proxy')
+
+        proxy = {}
+        if server:
+            host_port = server.rsplit(':', 1)
+            proxy['http_proxy_host'] = host_port[0]
+            if len(host_port) > 1:
+                proxy['http_proxy_port'] = host_port[1]
+
+        return proxy
 
     def _on_message(self, ws, message):
         click.echo(message, nl=False)

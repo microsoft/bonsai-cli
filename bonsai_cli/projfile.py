@@ -3,6 +3,7 @@ Project file implementation and logic
 """
 import os
 import json
+import glob
 
 DEFAULT_FILE = 'bonsai_brain.bproj'
 
@@ -16,9 +17,9 @@ class ProjectDefault():
     @staticmethod
     def apply(proj):
         if not proj.exists():
-            proj.files.add('./')
-            proj.training['simulator'] = 'openai.gym.unknown'
-            proj.training['command'] = 'python --version'
+            proj.files.add('*.ink')
+            proj.files.add('*.py')
+            proj.training['simulator'] = 'custom'
 
 
 class ProjectFile():
@@ -78,6 +79,8 @@ class ProjectFile():
         # of project files and functionality should be shared
         # see T1643
         project_dir = os.path.abspath(self.directory())
+
+        path_set = set()
         for path in self._file_set:
             # join paths relative to the project directory, otherwise
             # python assumes the current working directory.
@@ -87,17 +90,27 @@ class ProjectFile():
                 # Ignore paths which are not under the project
                 continue
 
-            if os.path.isdir(merged):
-                for dirname, _, file_list in os.walk(merged):
-                    for f in file_list:
-                        if self._exclude_file(dirname, f):
-                            continue
+            # perform glob expansion on each (absolute) path in project
+            # iglob returns a (possibly empty) generator of expanded paths
+            expanded_paths = glob.iglob(merged)
+            for expanded_path in expanded_paths:
+                if os.path.isdir(expanded_path):
+                    for dirname, _, file_list in os.walk(expanded_path):
+                        for f in file_list:
+                            if self._exclude_file(dirname, f):
+                                continue
 
-                        abs_path = os.path.join(dirname, f)
-                        rel_path = os.path.relpath(abs_path, project_dir)
-                        yield rel_path
-            else:
-                yield path
+                            abs_path = os.path.join(dirname, f)
+                            rel_path = os.path.relpath(abs_path, project_dir)
+                            path_set.add(rel_path)
+                else:
+                    dirname, fname = os.path.split(expanded_path)
+                    if self._exclude_file(dirname, fname):
+                        continue
+                    rel_path = os.path.relpath(expanded_path, project_dir)
+                    path_set.add(rel_path)
+
+        return path_set
 
     def _exclude_file(self, dirname, filename):
         """ Returns True/False if file should be excluded as part of wildcard
@@ -116,6 +129,10 @@ class ProjectFile():
 
         # .brains, .gitignore, etc.
         if filename.startswith('.'):
+            return True
+
+        # python byte code
+        if filename.endswith('.pyc'):
             return True
 
         return False
@@ -156,7 +173,8 @@ class ProjectFile():
             dir = self.directory()
             for filename in self.content["files"]:
                 path = os.path.join(dir, filename)
-                if not os.path.exists(path):
+                if not os.path.exists(path) and \
+                   not glob.glob(path):
                     msg = "Unable to find {}, as specified in {}".format(
                         filename, self.project_path)
                     raise ProjectFileInvalidError(msg)

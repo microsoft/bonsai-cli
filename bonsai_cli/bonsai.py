@@ -8,6 +8,7 @@ as specified by setup.py.
 import os
 import time
 import logging
+from json import dumps
 
 import click
 from tabulate import tabulate
@@ -161,7 +162,7 @@ def configure(key):
         access_key = key
     else:
         access_key_message = ("You can get this access key from "
-                              "https://beta.bons.ai/accounts/settings/key.")
+                              "https://beta.bons.ai/accounts/settings/key")
         click.echo(access_key_message)
 
         access_key = click.prompt(
@@ -216,9 +217,18 @@ def brain_list():
         content = _api().list_brains()
         rows = []
         if content and 'brains' in content and len(content['brains']) > 0:
+            # Try grabbing the default brain from .brains for later marking
+            # If none is available, we just won't mark a list item
+            try:
+                default_brain = _default_brain()
+            except:
+                default_brain = ''
+
             for item in content['brains']:
                 try:
                     name = item['name']
+                    if name == default_brain:
+                        name = "-> " + name
                     state = item['state']
                     rows.append([name, state])
                 except KeyError:
@@ -400,7 +410,7 @@ def _brain_download(brain_name, dest_dir):
                 if dirname and not os.path.exists(dirname):
                     os.makedirs(dirname)
 
-                with open(file_path, "w") as outfile:
+                with open(file_path, "wb") as outfile:
                     outfile.write(files[filename])
     except BrainServerError as e:
         _raise_as_click_exception(e)
@@ -426,6 +436,7 @@ def sims_list(brain, project):
     try:
         content = _api().list_simulators(brain)
         rows = []
+        click.echo("Simulators for {}:".format(brain))
         for sim_name, sim_details in content.items():
             rows.append([sim_name, 1, 'connected'])
 
@@ -450,6 +461,7 @@ def brain_train_start(brain, project, sim_local):
     brain = _brain_fallback(brain, project)
     try:
         content = _api().start_training_brain(brain, sim_local)
+        click.echo("Start training {}...".format(brain))
         click.echo(
             "When training completes, connect simulators to {}{} "
             "for predictions".format(
@@ -477,8 +489,9 @@ def brain_train_status(brain, json, project):
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
+    click.echo("Status for {}:".format(brain))
     if json:
-        click.echo(status)
+        click.echo(dumps(status))
     else:
         keys = list(status.keys())
         keys.sort()
@@ -498,6 +511,7 @@ def brain_train_stop(brain, project):
     """Stops training on the specified BRAIN."""
 
     brain = _brain_fallback(brain, project)
+    click.echo("Stop training {}...".format(brain))
     try:
         _api().stop_training_brain(brain)
         click.echo("Stopped.")
@@ -520,6 +534,7 @@ def brain_log(brain, project, follow):
     # TODO: extend for multiple simulators
     sims = ["1"]
 
+    click.echo("Simulator logs for {}:".format(brain))
     if follow:
         _api().get_simulator_logs_stream(brain, "latest", sims[0])
     else:
