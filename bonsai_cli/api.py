@@ -16,6 +16,7 @@ import functools
 _VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
 _LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
 _CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
+_DELETE_BRAIN_URL_TEPLATE = "{api_url}/v1/{username}/{brain}"
 _EDIT_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
 _GET_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
 _SIMS_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/sims"
@@ -271,6 +272,24 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
+    @_handles_connection_error
+    def _delete(self, url):
+        """
+        Issues a DELETE request.
+        :param url: The URL to DELETE.
+        """
+        log.debug('DELETE %s...', url)
+        response = requests.delete(url=url,
+                                   headers={'Authorization': self._access_key},
+                                   allow_redirects=False)
+        try:
+            response.raise_for_status()
+            self._raise_on_redirect(response)
+            log.debug('DELETE %s results:\n%s', url, response.text)
+            return _dict(response)
+        except requests.exceptions.HTTPError as e:
+            _handle_and_raise(response, e)
+
     def _compose_multipart(self, json_dict, filesdata):
         """ Composes multipart/mixed request for create/edit brain.
 
@@ -460,6 +479,22 @@ class BonsaiAPI(object):
         else:
             data = {"name": brain_name}
             return self._post(url=url, data=data)
+
+    def delete_brain(self, brain_name):
+        """
+        Issues a command to the BRAIN backend to delete a BRAIN. If the request
+        failes, an exception is raised.
+        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
+        >>> bonsai_api.delete_brain('cartpole')
+        """
+        log.debug('Deleting a brain named %s for %s',
+                  brain_name, self._user_name)
+        url = _DELETE_BRAIN_URL_TEPLATE.format(
+            api_url=self._api_url,
+            username=self._user_name,
+            brain=brain_name
+        )
+        return self._delete(url=url)
 
     def edit_brain(self, brain_name, project_file):
         """

@@ -4,6 +4,12 @@
 ### Changed
 - API client code to upload project files with MIME type `application/octet-stream`
 - Default project file to include both `.ink` and `.py` files
+- Added '-h' as another option for '--help' for all commands
+- Added top level 'help' command to cli
+- Added version checking to the --version option
+
+### Added
+- The ability to delete BRAINs from the command line.
 
 ## 0.8.15
 ### Added

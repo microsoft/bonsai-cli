@@ -3,12 +3,18 @@ This file contains unit tests for bonsai command line.
 """
 import os
 from unittest import TestCase
-from unittest.mock import Mock, patch
+
+# python 3.3+ includes mock in the unittest module
+try:
+    from unittest.mock import Mock, patch
+except ImportError:
+    from mock import Mock, patch
 
 from click.testing import CliRunner
 
+from bonsai_cli import __version__
 from bonsai_cli.api import BrainServerError, BonsaiAPI
-from bonsai_cli.bonsai import cli
+from bonsai_cli.bonsai import cli, _get_pypi_version
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
 from bonsai_config import BonsaiConfig
@@ -43,8 +49,13 @@ class TestBrainCommand(TestCase):
 
         self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
 
-    def test_missing_parameter(self):
+    def test_missing_parameter_create(self):
         result = self.runner.invoke(cli, ['create'])
+
+        self.assertNotEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+    def test_missing_parameter_delete(self):
+        result = self.runner.invoke(cli, ['delete'])
 
         self.assertNotEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
@@ -91,6 +102,31 @@ class TestMockedBrainCommand(TestCase):
         self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
         # should fail if directory/files already exist
         self.assertEqual(repeat_response.exit_code, FAILURE_EXIT_CODE)
+
+    def test_brain_delete(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            # Brain exists, delete succeeds
+            brain_set = {'brains': [{'name': 'mybrain'}]}
+            self.api.list_brains = Mock(return_value=brain_set)
+            result = self.runner.invoke(
+                cli, ['delete', 'mybrain'])
+
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue("WARNING" in result.output)
+            self.assertTrue("deleted" in result.output)
+
+            # Brain does not exist, command completes but prints a
+            # message informing user that no action was taken.
+            brain_set = {'brains': []}
+            self.api.list_brains = Mock(return_value=brain_set)
+            result = self.runner.invoke(
+                cli, ['delete', 'mybrain'])
+
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue("WARNING" not in result.output)
+            self.assertTrue("does not exist. No action" in result.output)
 
     def test_brain_create(self):
         self.api.list_brains = Mock(return_value={'brains': []})
@@ -311,6 +347,36 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("url = https://api.bons.ai" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
 
+    @patch.object(BonsaiConfig, 'check_section_exists',
+                  create=True, return_value=False)
+    def test_bonsai_switch_new_profile(self, check_section_mock):
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # Create a new profile with --url option
+            result = self.runner.invoke(cli,
+                                        ['switch', '--url', 'FOO', 'FIZZ'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # Attempt to switch to a profile that does not exist
+            result = self.runner.invoke(cli, ['switch', 'FOO'])
+            self.assertTrue("Profile not found" in result.output)
+
+    @patch.object(BonsaiConfig, 'check_section_exists',
+                  create=True, return_value=True)
+    def test_bonsai_switch_valid_profile(self, check_section_mock):
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # Create new profile and switch to it
+            result = self.runner.invoke(cli, ['switch', '--url', 'BAR', 'FOO'])
+            result = self.runner.invoke(cli, ['switch', 'FOO'])
+            self.assertTrue("Success!" in result.output)
+
     def test_brain_list_with_dotbrains(self):
         brains = [
             {"name": "brain_a", "state": "Stopped"},
@@ -330,8 +396,12 @@ class TestMockedBrainCommand(TestCase):
             # i.e. "brain_b  Not Started" -> ["brain_b", "Not Started"]
             table_string = result.output
             table_lines = table_string.split("\n")
-            brain_lines = [l.split(sep=None, maxsplit=2)
-                           for l in table_lines if "brain_" in l]
+            try:
+                brain_lines = [l.split(sep=None, maxsplit=2)
+                               for l in table_lines if "brain_" in l]
+            except TypeError:
+                brain_lines = [l.split(None, 2)
+                               for l in table_lines if "brain_" in l]
 
             # Check values. Note that the default brain is marked
             # NB: DotBrains defines the default brain as the last added
@@ -354,8 +424,12 @@ class TestMockedBrainCommand(TestCase):
             # i.e. "brain_b  Not Started" -> ["brain_b", "Not Started"]
             table_string = result.output
             table_lines = table_string.split("\n")
-            brain_lines = [l.split(sep=None, maxsplit=1)
-                           for l in table_lines if "brain_" in l]
+            try:
+                brain_lines = [l.split(sep=None, maxsplit=1)
+                               for l in table_lines if "brain_" in l]
+            except TypeError:
+                brain_lines = [l.split(None, 1)
+                               for l in table_lines if "brain_" in l]
 
             # Check values. No default brain is marked
             self.assertEqual(brain_lines[0], ["brain_a", "Stopped"])
@@ -664,3 +738,53 @@ class TestMockedBrainCommand(TestCase):
             args.extend(['--project', 'new_bogus_folder'])
             result = self.runner.invoke(cli, args)
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+
+
+class TestPyPiVersionRequest(TestCase):
+    """ Contains all the tests for --version in cli """
+    def setUp(self):
+        self.runner = CliRunner()
+
+        self.req_fail_output = 'Bonsai ' + __version__ + '\n' \
+                               'Unable to connect to PyPi and ' \
+                               'determine if CLI is up to date.\n'
+        self.not_up_to_date_output = 'Bonsai ' + __version__ + '\nBonsai ' \
+                                     'update available. The most recent ' \
+                                     'version is : 9999\nUpgrade via pip ' \
+                                     'using \'pip install --upgrade ' \
+                                     'bonsai-cli\'\n'
+        self.up_to_date_output = 'Bonsai ' + __version__ + \
+                                 '\nEverything is up to date.\n'
+
+    def test_get_pypi_version_valid_url(self):
+        """ Test PyPi version request with valid url """
+        _get_pypi_version = Mock(return_value='0.8.14')
+        pypi_version = _get_pypi_version('valid_url')
+        self.assertNotEqual(pypi_version, None)
+
+    def test_get_pypi_version_invalid_url(self):
+        """ Test PyPi version request with invalid url """
+        _get_pypi_version = Mock(return_value=None)
+        pypi_version = _get_pypi_version('invalid_url')
+        self.assertEqual(pypi_version, None)
+
+    @patch('bonsai_cli.bonsai._get_pypi_version', return_value=None)
+    def test_request_fail_cli_output(self, patched_function):
+        """ Test output when request failure/json failure """
+        result = self.runner.invoke(cli, ['--version'])
+        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        self.assertEqual(result.output, self.req_fail_output)
+
+    @patch('bonsai_cli.bonsai._get_pypi_version', return_value='9999')
+    def test_version_not_up_to_date_cli_output(self, patched_function):
+        """ Test output when cli is out of date """
+        result = self.runner.invoke(cli, ['--version'])
+        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        self.assertEqual(result.output, self.not_up_to_date_output)
+
+    @patch('bonsai_cli.bonsai._get_pypi_version', return_value=__version__)
+    def test_version_up_to_date_cli_output(self, patched_function):
+        """ Test output when cli is up to date """
+        result = self.runner.invoke(cli, ['--version'])
+        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        self.assertEqual(result.output, self.up_to_date_output)

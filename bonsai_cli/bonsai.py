@@ -8,9 +8,10 @@ as specified by setup.py.
 import os
 import time
 import logging
-from json import dumps
+from json import dumps, decoder
 
 import click
+import requests
 from tabulate import tabulate
 
 from bonsai_config import BonsaiConfig
@@ -19,6 +20,12 @@ from bonsai_cli import __version__
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectDefault
 from bonsai_cli.projfile import ProjectFile, ProjectFileInvalidError
+
+""" Global variable for click context settings following the conventions
+from the click documentation. It can be modified to add more context
+settings if they are needed in future development of the cli.
+"""
+CONTEXT_SETTINGS = dict(help_option_names=['--help', '-h'])
 
 
 def _verify_required_configuration(bonsai_config):
@@ -135,15 +142,75 @@ def _show_version():
     click.echo("bonsai_cli %s" % __version__)
 
 
-@click.group()
+def _get_pypi_version(pypi_url):
+    """
+    This function attempts to get the package information
+    from PyPi. It returns None if the request is bad, json
+    is not decoded, or we have a KeyError in json dict
+    """
+    try:
+        pkg_request = requests.get(pypi_url)
+        pkg_json = pkg_request.json()
+        pypi_version = pkg_json['info']['version']
+    except requests.exceptions.RequestException:
+        # could not connect to the server
+        # blanket exception that covers various request issues
+        return None
+    except (decoder.JSONDecodeError, KeyError):
+        # could not decode json or key error in dict
+        return None
+
+    # Successfully connected and obtained version info
+    return pypi_version
+
+
+def _check_version(ctx, param, value):
+    """
+    This is the callback function when --version option
+    is used. The function lets the user know what version
+    of the cli they are currently on and if there is an
+    update available.
+    """
+    if not value or ctx.resilient_parsing:
+        return
+
+    pypi_url = 'https://pypi.python.org/pypi/bonsai-cli/json'
+    pypi_version = _get_pypi_version(pypi_url)
+    user_cli_version = __version__
+
+    if not pypi_version:
+        print('Bonsai ' + user_cli_version)
+        print('Unable to connect to PyPi and determine if CLI is up to date.')
+    elif user_cli_version != pypi_version:
+        print('Bonsai ' + user_cli_version)
+        print('Bonsai update available. The most recent version is : ' +
+              pypi_version)
+        print('Upgrade via pip using \'pip install --upgrade bonsai-cli\'')
+    else:
+        print('Bonsai ' + user_cli_version)
+        print('Everything is up to date.')
+
+    ctx.exit()
+
+
+@click.group(context_settings=CONTEXT_SETTINGS)
 @click.option('--debug/--no-debug', default=False,
               help='Enable/disable verbose debugging output.')
-@click.version_option(version=__version__)
+@click.option('--version', is_flag=True, callback=_check_version,
+              help='Show the version and check if bonsai is up to date.',
+              expose_value=False, is_eager=True)
 def cli(debug):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
     """
     log_level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=log_level)
+
+
+@click.command('help')
+@click.pass_context
+def bonsai_help(ctx):
+    """ Show this message and exit. """
+    click.echo(ctx.parent.get_help())
 
 
 @click.group()
@@ -188,11 +255,26 @@ def configure(key):
 
 
 @click.command()
+@click.pass_context
 @click.argument("profile")
 @click.option("--url", default=None, help="Set the brain api url.")
-def switch(profile, url):
-    """Change the active configuration section."""
+def switch(ctx, profile, url):
+    """
+    Change the active configuration section.\n
+    For new profiles you must provide a url with the --url option.
+    """
     bonsai_config = BonsaiConfig()
+    section_exists = bonsai_config.check_section_exists(profile)
+
+    # Let the user know that when switching to a new profile
+    # the --url option must be provided
+    if not section_exists and not url:
+        error = 'Profile not found.\n'
+        error_msg = 'Please provide a url with the --url ' \
+                    'option for new profiles'
+        print(error + error_msg)
+        ctx.exit(1)
+
     bonsai_config.update(Profile=profile)
     if url:
         bonsai_config.update(Url=url)
@@ -210,9 +292,7 @@ def sims():
 
 @click.command("list", short_help="Lists BRAINs owned by current user.")
 def brain_list():
-    """Lists BRAINs owned by current user or by the user under a given
-    URL.
-    """
+    """Lists BRAINs owned by current user."""
     try:
         content = _api().list_brains()
         rows = []
@@ -333,6 +413,41 @@ def brain_create_local(brain_name, project, project_type):
                "training sources into {}.".format(brain_name))
 
 
+@click.command("delete",
+               short_help="Delete a BRAIN.")
+@click.argument("brain_name")
+def brain_delete(brain_name):
+    """
+    Deletes a BRAIN. A deleted BRAIN cannot be recovered.
+    The name of a deleted BRAIN cannot be reused.
+    """
+    try:
+        brain_list = _api().list_brains()
+        brains = brain_list['brains']
+    except BrainServerError as e:
+        click.echo("Error:")
+        _raise_as_click_exception(e)
+
+    names = [b['name'] for b in brains]
+    if brain_name not in names:
+        click.echo("Brain {} does not exist. "
+                   "No action was taken.".format(brain_name))
+    else:
+        click.echo("WARNING: This operation has no effect on your "
+                   "local file system.\n"
+                   "WARNING: Deletion may cause discontinuity "
+                   "between .brains and the Bonsai platform.")
+        click.echo("Deleting {}, ".format(brain_name), nl=False)
+        try:
+            _api().delete_brain(brain_name)
+        except BrainServerError as e:
+            click.echo("Error:")
+            _raise_as_click_exception(e)
+        else:
+            click.echo("deleted.")
+            click.echo("The name '{}' cannot be reused.".format(brain_name))
+
+
 @click.command("push")
 @click.option("--brain",
               help="Override to target another BRAIN.")
@@ -446,6 +561,10 @@ def sims_list(brain, project):
         click.echo(table)
     except BrainServerError as e:
         _raise_as_click_exception(e)
+    except AttributeError as e:
+        err_msg = 'You have not started training.\n' \
+                  'Please run \'bonsai train start\' first.'
+        print(err_msg)
 
 
 @click.command("start")
@@ -555,11 +674,13 @@ def brain_log(brain, project, follow):
 cli.add_command(configure)
 cli.add_command(sims)
 cli.add_command(switch)
+cli.add_command(bonsai_help)
 # T1666 - break out the actions of brain_create_local
 # cli.add_command(brain)
 
 # The brain commands: create, list, download, load, and train
 cli.add_command(brain_create_local)
+cli.add_command(brain_delete)
 cli.add_command(brain_push)
 cli.add_command(brain_list)
 cli.add_command(brain_download)

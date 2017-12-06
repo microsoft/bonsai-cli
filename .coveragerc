@@ -2,7 +2,6 @@
 [run]
 branch = True
 source = bonsai_cli
-parallel = True
 
 [report]
 # Regexes for lines to exclude from consideration
