@@ -1,9 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.8.16
 ### Changed
-- API client code to upload project files with MIME type `application/octet-stream`
-- Default project file to include both `.ink` and `.py` files
+
 - Added '-h' as another option for '--help' for all commands
 - Added top level 'help' command to cli
 - Added version checking to the --version option
@@ -20,7 +19,8 @@
 - Allows http_proxy, https_proxy and all_proxy to configure websockets
 
 ### Changed
-- Default project file to include only `.ink` files
+- API client code to upload project files with MIME type `application/octet-stream`
+- Default project file to include both `.ink` and `.py` files
 
 ## 0.8.14
 ### Added
