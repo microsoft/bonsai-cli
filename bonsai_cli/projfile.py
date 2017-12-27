@@ -75,12 +75,25 @@ class ProjectFile():
         Lists all file paths (relative) referenced by 'files', with directories
         expanded
         """
-        # This logic is shared with the backend project's parsing
-        # of project files and functionality should be shared
-        # see T1643
         project_dir = os.path.abspath(self.directory())
 
         path_set = set()
+
+        def add_to_path_set(dir_name, file_name):
+            """
+            Helper function to add the specified directory and file to
+            the set of all file paths.
+            """
+            # Do nothing if this dir and file should be excluded
+            if self._exclude_file(dir_name, file_name):
+                return
+
+            # Join the dir and file and get the path relative to the
+            # project directory before adding it
+            abs_path = os.path.join(dir_name, file_name)
+            rel_path = os.path.relpath(abs_path, project_dir)
+            path_set.add(rel_path)
+
         for path in self._file_set:
             # join paths relative to the project directory, otherwise
             # python assumes the current working directory.
@@ -97,18 +110,11 @@ class ProjectFile():
                 if os.path.isdir(expanded_path):
                     for dirname, _, file_list in os.walk(expanded_path):
                         for f in file_list:
-                            if self._exclude_file(dirname, f):
-                                continue
+                            add_to_path_set(dirname, f)
 
-                            abs_path = os.path.join(dirname, f)
-                            rel_path = os.path.relpath(abs_path, project_dir)
-                            path_set.add(rel_path)
                 else:
                     dirname, fname = os.path.split(expanded_path)
-                    if self._exclude_file(dirname, fname):
-                        continue
-                    rel_path = os.path.relpath(expanded_path, project_dir)
-                    path_set.add(rel_path)
+                    add_to_path_set(dirname, fname)
 
         return path_set
 
@@ -140,9 +146,10 @@ class ProjectFile():
     @property
     def inkling_file(self):
         inkling_files = [f for f in self._list_paths() if f.endswith('.ink')]
-        if len(inkling_files) != 1:
-            if len(inkling_files) == 0:
-                raise ProjectFileInvalidError('No inkling file found')
+
+        if not inkling_files:
+            raise ProjectFileInvalidError('No inkling file found')
+        elif len(inkling_files) > 1:
             raise ProjectFileInvalidError(
                 'Multiple inkling files found. Set one in "files" in the'
                 ' project file to indicate which should be loaded. '
