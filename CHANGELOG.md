@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.17
+### Changed
+- Lint fixes
+
 ## 0.8.16
 ### Changed
 
