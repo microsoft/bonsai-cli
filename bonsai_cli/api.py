@@ -1,5 +1,10 @@
 import logging
 
+try:
+    from urllib.parse import urljoin
+except ImportError:
+    from urlparse import urljoin
+
 import click
 import email
 import requests
@@ -13,20 +18,20 @@ from requests.packages.urllib3.filepost import encode_multipart_formdata
 import websocket
 import functools
 
-_VALIDATE_URL_TEMPLATE = "{api_url}/v1/validate"
-_LIST_BRAINS_URL_TEMPLATE = "{api_url}/v1/{username}"
-_CREATE_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/brains"
-_DELETE_BRAIN_URL_TEPLATE = "{api_url}/v1/{username}/{brain}"
-_EDIT_BRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
-_GET_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}"
-_SIMS_INFO_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/sims"
-_SIMS_LOGS_URL_TEMPLATE = (
-    "{api_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs")
+_VALIDATE_URL_PATH = "/v1/validate"
+_LIST_BRAINS_URL_PATH_TEMPLATE = "/v1/{username}"
+_CREATE_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/brains"
+_DELETE_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
+_EDIT_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
+_GET_INFO_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
+_SIMS_INFO_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/sims"
+_SIMS_LOGS_URL_PATH_TEMPLATE = (
+    "/v1/{username}/{brain}/{version}/sims/{sim}/logs")
 _SIM_LOGS_STREAM_URL_TEMPLATE = (
-    "{ws_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs/ws")
-_STATUS_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/status"
-_TRAIN_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/train"
-_STOP_URL_TEMPLATE = "{api_url}/v1/{username}/{brain}/stop"
+    "/v1/{username}/{brain}/{version}/sims/{sim}/logs/ws")
+_STATUS_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/status"
+_TRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/train"
+_STOP_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/stop"
 
 
 log = logging.getLogger(__name__)
@@ -346,15 +351,14 @@ class BonsaiAPI(object):
         log.debug('Getting simulator logs follow for BRAIN %s for %s, '
                   'version=%s, sim=%s', brain_name, self._user_name, version,
                   sim)
-        ws_url = _SIM_LOGS_STREAM_URL_TEMPLATE.format(
-            ws_url=self._ws_url,
+        url_path = _SIM_LOGS_STREAM_URL_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name,
             version=version,
             sim=sim
         )
-
-        handler = LogStreamHandler(ws_url, self._access_key)
+        url = urljoin(self._ws_url, url_path)
+        handler = LogStreamHandler(url, self._access_key)
         handler.run()
 
     def validate(self):
@@ -374,7 +378,7 @@ class BonsaiAPI(object):
                  key.
         """
         log.debug('Validating access key')
-        url = _VALIDATE_URL_TEMPLATE.format(api_url=self._api_url)
+        url = urljoin(self._api_url, _VALIDATE_URL_PATH)
         return self._post(url=url)
 
     def list_brains(self):
@@ -400,10 +404,10 @@ class BonsaiAPI(object):
         :return: Dictionary of BRAINs.
         """
         log.debug('Getting list of brains for %s...', self._user_name)
-        url = _LIST_BRAINS_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _LIST_BRAINS_URL_PATH_TEMPLATE.format(
             username=self._user_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._get(url=url)
 
     def _create_brain_multipart(self, url, brain, project_file):
@@ -467,10 +471,10 @@ class BonsaiAPI(object):
         """
         log.debug('Creating a brain named %s for %s',
                   brain_name, self._user_name)
-        url = _CREATE_BRAIN_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _CREATE_BRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name
         )
+        url = urljoin(self._api_url, url_path)
         if project_type:
             data = {"name": brain_name, "project_type": project_type}
             return self._post(url=url, data=data)
@@ -489,11 +493,11 @@ class BonsaiAPI(object):
         """
         log.debug('Deleting a brain named %s for %s',
                   brain_name, self._user_name)
-        url = _DELETE_BRAIN_URL_TEPLATE.format(
-            api_url=self._api_url,
+        url_path = _DELETE_BRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._delete(url=url)
 
     def edit_brain(self, brain_name, project_file):
@@ -507,11 +511,11 @@ class BonsaiAPI(object):
         """
         log.debug('Editing a brain named %s for %s',
                   brain_name, self._user_name)
-        url = _EDIT_BRAIN_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _EDIT_BRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._edit_brain_multipart(url, project_file)
 
     def get_brain_files(self, brain_name):
@@ -523,11 +527,11 @@ class BonsaiAPI(object):
         :param brain_name: The name of the BRAIN
         :param user_name: Override of class' user for the request
         """
-        url = _GET_INFO_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _GET_INFO_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._get_multipart(url=url)
 
     def list_simulators(self, brain_name):
@@ -553,11 +557,11 @@ class BonsaiAPI(object):
         """
         log.debug('Getting simulators for BRAIN %s for %s',
                   brain_name, self._user_name)
-        url = _SIMS_INFO_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _SIMS_INFO_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._get(url=url)
 
     def get_simulator_logs(self, brain_name, version, sim):
@@ -574,13 +578,13 @@ class BonsaiAPI(object):
         """
         log.debug('Getting simulator logs for BRAIN %s for %s, version=%s, '
                   'sim=%s', brain_name, self._user_name, version, sim)
-        url = _SIMS_LOGS_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _SIMS_LOGS_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name,
             version=version,
             sim=sim
         )
+        url = urljoin(self._api_url, url_path)
         return self._get(url=url)
 
     def start_training_brain(self, brain_name, sim_local=True):
@@ -595,11 +599,11 @@ class BonsaiAPI(object):
         log.debug('Starting training for BRAIN %s for %s',
                   brain_name, self._user_name)
         data = {} if sim_local else {'manage_simulator': True}
-        url = _TRAIN_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _TRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._put(url=url, data=data)
 
     def get_brain_status(self, brain_name):
@@ -620,11 +624,11 @@ class BonsaiAPI(object):
         """
         log.debug('Get the status of BRAIN %s for %s.',
                   brain_name, self._user_name)
-        url = _STATUS_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _STATUS_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._get(url=url)
 
     def stop_training_brain(self, brain_name):
@@ -637,11 +641,11 @@ class BonsaiAPI(object):
         """
         log.debug('Stopping training for BRAIN %s for %s',
                   brain_name, self._user_name)
-        url = _STOP_URL_TEMPLATE.format(
-            api_url=self._api_url,
+        url_path = _STOP_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
         )
+        url = urljoin(self._api_url, url_path)
         return self._put(url=url)
 
 

@@ -58,7 +58,7 @@ class ProjectFile():
         try:
             with open(path, 'r') as f:
                 proj = json.load(f)
-        except (OSError, IOError, ValueError):
+        except (OSError, IOError):
             pass
         return proj
 

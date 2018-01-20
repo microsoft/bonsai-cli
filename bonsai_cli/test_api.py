@@ -21,7 +21,7 @@ class TestBonsaiApi(TestCase):
     Contains all the tests for the bonsai api
     """
     def setUp(self):
-        self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'someurl')
+        self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/')
 
     @patch('requests.post')
     def testValidate(self, mock_post):
@@ -44,10 +44,39 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_once_with(allow_redirects=False,
                                           headers={'Authorization': 'fakekey'},
                                           json=None,
-                                          url='someurl/v1/validate')
+                                          url='https://someurl/v1/validate')
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
+
+    @patch('requests.post')
+    def testValidateUrlJoining(self, mock_post):
+        """
+        Test that url's are joined correctly for validate
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_post.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.validate()
+        mock_post.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/validate'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.validate()
+        mock_post.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/validate'
+        )
 
     @patch('requests.post')
     def testValidateRaiseError(self, mock_post):
@@ -67,10 +96,12 @@ class TestBonsaiApi(TestCase):
             self.tempapi.validate()
 
         # Check that our api made expected calls
-        mock_post.assert_called_once_with(allow_redirects=False,
-                                          headers={'Authorization': 'fakekey'},
-                                          json=None,
-                                          url='someurl/v1/validate')
+        mock_post.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/validate'
+        )
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
@@ -87,12 +118,43 @@ class TestBonsaiApi(TestCase):
         response_dict = self.tempapi.create_brain('fakename')
 
         # Check that our api made expected calls
-        mock_post.assert_called_once_with(allow_redirects=False,
-                                          headers={'Authorization': 'fakekey'},
-                                          json={'name': 'fakename'},
-                                          url='someurl/v1/fakeuser/brains')
+        mock_post.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={'name': 'fakename'},
+            url='https://someurl/v1/fakeuser/brains'
+        )
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
+
+    @patch('requests.post')
+    def testCreateBrainUrlJoining(self, mock_post):
+        """
+        Test that url's are joined correctly for create
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_post.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.create_brain('foo')
+        mock_post.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={'name': 'foo'},
+            url='https://someurl/v1/fakeuser/brains'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.create_brain('bar')
+        mock_post.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={'name': 'bar'},
+            url='https://someurl/v1/fakeuser/brains'
+        )
 
     @patch('requests.post')
     def testCreateBrainWithProjectType(self, mock_post):
@@ -107,11 +169,13 @@ class TestBonsaiApi(TestCase):
         response_dict = self.tempapi.create_brain('fakename', None, 'projtype')
 
         # Check that our api made expected calls
-        mock_post.assert_called_once_with(allow_redirects=False,
-                                          headers={'Authorization': 'fakekey'},
-                                          json={'name': 'fakename',
-                                                'project_type': 'projtype'},
-                                          url='someurl/v1/fakeuser/brains')
+        mock_post.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={'name': 'fakename',
+                  'project_type': 'projtype'},
+            url='https://someurl/v1/fakeuser/brains'
+        )
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
@@ -179,10 +243,35 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(headers={'Authorization': 'fakekey'},
-                                         url='someurl/v1/fakeuser')
+                                         url='https://someurl/v1/fakeuser')
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
+
+    @patch('requests.get')
+    def testListBrainsUrlJoining(self, mock_get):
+        """
+        Test that url's are joined correctly for list
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_get.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.list_brains()
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.list_brains()
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser'
+        )
 
     @patch('requests.get')
     def testListBrainsRaiseError(self, mock_get):
@@ -203,7 +292,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(headers={'Authorization': 'fakekey'},
-                                         url='someurl/v1/fakeuser')
+                                         url='https://someurl/v1/fakeuser')
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
@@ -226,7 +315,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(headers={'Authorization': 'fakekey'},
-                                         url='someurl/v1/fakeuser')
+                                         url='https://someurl/v1/fakeuser')
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(0, mock_response.json.call_count)
         self.assertEqual(response_dict, {})
@@ -254,12 +343,38 @@ class TestBonsaiApi(TestCase):
         response_dict = self.tempapi.get_brain_status('fakebrain')
 
         # Check that our api made expected calls
-        mock_get.assert_called_once_with(headers={'Authorization': 'fakekey'},
-                                         url='someurl/v1/fakeuser/fakebrain/'
-                                         'status')
+        mock_get.assert_called_once_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/status'
+        )
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
+
+    @patch('requests.get')
+    def testGetBrainStatusUrlJoining(self, mock_get):
+        """
+        Test that url's are joined correctly for get brain status
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_get.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.get_brain_status('fakebrain')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/status'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.get_brain_status('fakebrain')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/status'
+        )
 
     @patch('requests.get')
     def testGetSimLogs(self, mock_get):
@@ -280,12 +395,38 @@ class TestBonsaiApi(TestCase):
                                                         '1', 'cartpole')
 
         # Check that our api made expected calls
-        mock_get.assert_called_once_with(headers={'Authorization': 'fakekey'},
-                                         url='someurl/v1/fakeuser/fakebrain/'
-                                         '1/sims/cartpole/logs')
+        mock_get.assert_called_once_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/1/sims/cartpole/logs'
+        )
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_list, expected_list)
+
+    @patch('requests.get')
+    def testGetSimsLogsUrlJoining(self, mock_get):
+        """
+        Test that url's are joined correctly for get sim logs
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_get.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.get_simulator_logs('fakebrain', '1', 'cartpole')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/1/sims/cartpole/logs'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.get_simulator_logs('fakebrain', '1', 'cartpole')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/1/sims/cartpole/logs'
+        )
 
     @patch('requests.get')
     def testListSims(self, mock_get):
@@ -314,12 +455,38 @@ class TestBonsaiApi(TestCase):
         response_dict = self.tempapi.list_simulators('fakebrain')
 
         # Check that our api made expected calls
-        mock_get.assert_called_once_with(headers={'Authorization': 'fakekey'},
-                                         url='someurl/v1/fakeuser/fakebrain/'
-                                         'sims')
+        mock_get.assert_called_once_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/sims'
+        )
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
+
+    @patch('requests.get')
+    def testListSimsUrlJoining(self, mock_get):
+        """
+        Test that url's are joined correctly for list sims
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_get.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.list_simulators('fakebrain')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/sims'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.list_simulators('fakebrain')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain/sims'
+        )
 
     @patch('requests.get')
     def testGetBrainFiles(self, mock_get):
@@ -339,16 +506,49 @@ class TestBonsaiApi(TestCase):
         response_dict = self.tempapi.get_brain_files('fakebrain')
 
         # Check that our api made expected calls
-        mock_get.assert_called_once_with(headers={'Authorization': 'fakekey',
-                                                  'Accept': 'multipart/mixed',
-                                                  'Accept-Encoding': 'base64'},
-                                         url='someurl/v1/fakeuser/fakebrain')
+        mock_get.assert_called_once_with(
+            headers={'Authorization': 'fakekey',
+                     'Accept': 'multipart/mixed',
+                     'Accept-Encoding': 'base64'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(0, mock_response.json.call_count)
         self.assertEqual(response_dict, {})
 
+    @patch('requests.get')
+    def testGetBrainFilesUrlJoining(self, mock_get):
+        """
+        Test that url's are joined correctly for getting brain files
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+        mock_response.text = 'FOO'
+        mock_response.headers = {'FOO': 'BAR'}
+
+        # Assign mock response to our patched function
+        mock_get.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.get_brain_files('fakebrain')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey',
+                     'Accept': 'multipart/mixed',
+                     'Accept-Encoding': 'base64'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.get_brain_files('fakebrain')
+        mock_get.assert_called_with(
+            headers={'Authorization': 'fakekey',
+                     'Accept': 'multipart/mixed',
+                     'Accept-Encoding': 'base64'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
+
     @patch('requests.delete')
-    def testDeleteBrains(self, mock_delete):
+    def testDeleteBrain(self, mock_delete):
         """
         Test Delete Brain from api
         """
@@ -369,14 +569,42 @@ class TestBonsaiApi(TestCase):
         response_dict = self.tempapi.delete_brain('fakebrain')
 
         # Check that our api made expected calls
-        mock_delete.assert_called_once_with(allow_redirects=False,
-                                            headers={'Authorization':
-                                                     'fakekey'},
-                                            url='someurl/v1/fakeuser/fakebrain'
-                                            )
+        mock_delete.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization':
+                     'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
         self.assertEqual(1, mock_delete.call_count)
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
+
+    @patch('requests.delete')
+    def testDeleteBrainUrlJoining(self, mock_delete):
+        """
+        Test that url's are joined correctly for list sims
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_delete.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.delete_brain('fakebrain')
+        mock_delete.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.delete_brain('fakebrain')
+        mock_delete.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
 
     @patch('requests.delete')
     def testDeleteBrainRaiseError(self, mock_delete):
@@ -396,11 +624,11 @@ class TestBonsaiApi(TestCase):
             self.tempapi.delete_brain('fakebrain')
 
         # Check that our api made expected calls
-        mock_delete.assert_called_once_with(allow_redirects=False,
-                                            headers={'Authorization':
-                                                     'fakekey'},
-                                            url='someurl/v1/fakeuser/fakebrain'
-                                            )
+        mock_delete.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            url='https://someurl/v1/fakeuser/fakebrain'
+        )
         self.assertEqual(1, mock_delete.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
@@ -420,14 +648,43 @@ class TestBonsaiApi(TestCase):
         response = self.tempapi.start_training_brain('fakebrain')
 
         # Check that our api made expected calls
-        mock_put.assert_called_once_with(allow_redirects=False,
-                                         headers={'Authorization':
-                                                  'fakekey'},
-                                         json={},
-                                         url='someurl/v1/fakeuser/fakebrain/'
-                                             'train')
+        mock_put.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={},
+            url='https://someurl/v1/fakeuser/fakebrain/train'
+        )
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
+
+    @patch('requests.put')
+    def testStartTrainingBrainUrlJoining(self, mock_put):
+        """
+        Test that url's are joined correctly for starting training
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_put.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.start_training_brain('fakebrain')
+        mock_put.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={},
+            url='https://someurl/v1/fakeuser/fakebrain/train'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.start_training_brain('fakebrain')
+        mock_put.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json={},
+            url='https://someurl/v1/fakeuser/fakebrain/train'
+        )
 
     @patch('requests.put')
     def testStopTrainingBrain(self, mock_put):
@@ -445,14 +702,43 @@ class TestBonsaiApi(TestCase):
         response = self.tempapi.stop_training_brain('fakebrain')
 
         # Check that our api made expected calls
-        mock_put.assert_called_once_with(allow_redirects=False,
-                                         headers={'Authorization':
-                                                  'fakekey'},
-                                         json=None,
-                                         url='someurl/v1/fakeuser/fakebrain/'
-                                             'stop')
+        mock_put.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/fakeuser/fakebrain/stop'
+        )
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
+
+    @patch('requests.put')
+    def testStopTrainingBrainUrlJoining(self, mock_put):
+        """
+        Test that url's are joined correctly for stopping training
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_put.return_value = mock_response
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.stop_training_brain('fakebrain')
+        mock_put.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/fakeuser/fakebrain/stop'
+        )
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.stop_training_brain('fakebrain')
+        mock_put.assert_called_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/fakeuser/fakebrain/stop'
+        )
 
     @patch('requests.put')
     def testStopTrainingBrainRaiseError(self, mock_put):
@@ -472,11 +758,12 @@ class TestBonsaiApi(TestCase):
             self.tempapi.stop_training_brain('fakebrain')
 
         # Check that our api made expected calls
-        mock_put.assert_called_once_with(allow_redirects=False,
-                                         headers={'Authorization': 'fakekey'},
-                                         json=None,
-                                         url='someurl/v1/fakeuser/fakebrain/'
-                                         'stop')
+        mock_put.assert_called_once_with(
+            allow_redirects=False,
+            headers={'Authorization': 'fakekey'},
+            json=None,
+            url='https://someurl/v1/fakeuser/fakebrain/stop'
+        )
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
@@ -498,6 +785,31 @@ class TestBonsaiApi(TestCase):
 
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
+
+    @patch('requests.put')
+    def testEditBrainUrlJoining(self, mock_put):
+        """
+        Test that url's are joined correctly for editing brain
+        """
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+
+        # Assign mock response to our patched function
+        mock_put.return_value = mock_response
+        pf = ProjectFile()
+
+        # Test different urls and show that they are joined correctly
+        self.tempapi._api_url = 'https://someurl//'
+        self.tempapi.edit_brain('fakebrain', pf)
+        args, kwargs = mock_put.call_args
+        self.assertEqual('https://someurl/v1/fakeuser/fakebrain',
+                         kwargs.get('url'))
+
+        self.tempapi._api_url = 'https://someurl'
+        self.tempapi.edit_brain('fakebrain', pf)
+        args, kwargs = mock_put.call_args
+        self.assertEqual('https://someurl/v1/fakeuser/fakebrain',
+                         kwargs.get('url'))
 
     @patch('requests.put')
     def testPutRawDataHTTPError(self, mock_put):

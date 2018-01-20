@@ -295,6 +295,23 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue(result.output.startswith(
                 "Error: Refusing to create and download"))
 
+    def test_brain_create_invalid_json(self):
+        """ Test bonsai create throws error when projfile
+            is not in proper json format
+        """
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            with open('bonsai_brain.bproj', 'w') as f:
+                content = '{"files": ["*.ink",],"training":' \
+                          '{"simulator": "custom"}}'
+                f.write(content)
+
+            result = self.runner.invoke(cli, ['create', 'mybrain'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue(result.output.startswith(
+                 "Error: Bonsai Create Failed."))
+
     def _check_payload(self, payload, expected_files_list):
         self.assertTrue("description" in payload, "description field")
         self.assertTrue("project_file" in payload, "project_file field")
@@ -474,6 +491,25 @@ class TestMockedBrainCommand(TestCase):
 
             result = self.runner.invoke(cli, ['push'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
+
+    def test_brain_push_invalid_json(self):
+        """ Test bonsai push throws error when projfile
+            is not in proper json format
+        """
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            with open('bonsai_brain.bproj', 'w') as f:
+                content = '{"files": ["*.ink",],"training":' \
+                          '{"simulator": "custom"}}'
+                f.write(content)
+
+            result = self.runner.invoke(cli, ['push'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue(result.output.startswith(
+                 "Error: Bonsai Push Failed."))
 
     def test_brain_push_no_project_file(self):
         """ Tests there is graceful error  if `bonsai push` is run in

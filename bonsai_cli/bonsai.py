@@ -369,6 +369,15 @@ def _is_empty_dir(dir):
     return True
 
 
+def _brain_create_err_msg(project):
+    """ Returns a string containing an error message
+        that points to the appropriate project file """
+
+    return "Bonsai Create Failed.\nFailed to load project file '{}'".format(
+            ProjectFile.find(os.path.dirname(project)) if project
+            else ProjectFile.find(os.getcwd()))
+
+
 @click.command("create",
                short_help="Create a BRAIN and set the default BRAIN.")
 @click.argument("brain_name")
@@ -379,26 +388,36 @@ def _is_empty_dir(dir):
                    '(e.g. "demos/cartpole").')
 def brain_create_local(brain_name, project, project_type):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
+
     if project_type:
         # Create brain using project_type.
 
         # Make sure clean directory before continuing.
         cur_dir = os.getcwd()
         if not _is_empty_dir(cur_dir):
-            message = ("Refusing to create and download project files using "
-                       "project-type in non-empty directory.  Please run in an"
-                       " empty directory.")
+            message = ("Refusing to create and download project files "
+                       "using project-type in non-empty directory. "
+                       "Please run in an empty directory.")
             raise click.ClickException(message)
 
         brain_create_server(brain_name, project_type=project_type)
         _brain_download(brain_name, cur_dir)
-        bproj = ProjectFile.from_file_or_dir(cur_dir)
+        try:
+            bproj = ProjectFile.from_file_or_dir(cur_dir)
+        except ValueError as e:
+            err_msg = _brain_create_err_msg(project)
+            _raise_as_click_exception(err_msg, e)
     else:
         # Create brain using project file.
-        if project:
-            bproj = ProjectFile.from_file_or_dir(project)
-        else:
-            bproj = ProjectFile()
+        try:
+            if project:
+                bproj = ProjectFile.from_file_or_dir(project)
+            else:
+                bproj = ProjectFile()
+        except ValueError as e:
+            err_msg = _brain_create_err_msg(project)
+            _raise_as_click_exception(err_msg, e)
+
         _validate_project_file(bproj)
 
         brain_create_server(brain_name, project_file=bproj)
@@ -465,7 +484,14 @@ def brain_push(brain, project):
         message = ("Unable to locate project file (.bproj) in "
                    "directory={}".format(directory))
         raise click.ClickException(message)
-    bproj = ProjectFile(path=path)
+
+    try:
+        bproj = ProjectFile(path=path)
+    except ValueError as e:
+        msg = "Bonsai Push Failed.\nFailed to load project file '{}'".format(
+            path)
+        _raise_as_click_exception(msg, e)
+
     _validate_project_file(bproj)
 
     # Upload file(s) based on project file
