@@ -103,6 +103,72 @@ class TestMockedBrainCommand(TestCase):
         # should fail if directory/files already exist
         self.assertEqual(repeat_response.exit_code, FAILURE_EXIT_CODE)
 
+    def test_brain_pull_all(self):
+        """Test that brain pull all pulles all files"""
+        self.api.get_brain_files.return_value = {
+            'test.txt': b'# test file 1',
+            'test2.txt': b'# test file 2'
+        }
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            result = self.runner.invoke(cli, ['pull', '--all'])
+            files = [f for f in os.listdir('.') if os.path.isfile(f)]
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue('test.txt' in files)
+            self.assertTrue('test2.txt' in files)
+
+    @patch('bonsai_cli.bonsai.input', return_value='yes')
+    def test_brain_pull_yes(self, patched_input):
+        """Test files are pulled when answering yes during bonsai pull"""
+        self.api.get_brain_files.return_value = {
+            'test.txt': b'# test file 1',
+            'test2.txt': b'# test file 2'
+        }
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            result = self.runner.invoke(cli, ['pull'])
+            files = [f for f in os.listdir('.') if os.path.isfile(f)]
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue('test.txt' in files)
+            self.assertTrue('test2.txt' in files)
+
+    @patch('bonsai_cli.bonsai.input', return_value='no')
+    def test_brain_pull_no(self, patched_input):
+        """Test files are not pulled when answering no during bonsai pull"""
+        self.api.get_brain_files.return_value = {
+            'test.txt': b'# test file 1',
+            'test2.txt': b'# test file 2'
+        }
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            result = self.runner.invoke(cli, ['pull'])
+            files = [f for f in os.listdir('.') if os.path.isfile(f)]
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertFalse('test.txt' in files)
+            self.assertFalse('test2.txt' in files)
+
+    def test_brain_pull_fail(self):
+        """Test that brain pull fails with appropriate Error Message"""
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+
+            result = self.runner.invoke(cli, ['pull'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Missing brain name' in result.output)
+
     def test_brain_delete(self):
         with self.runner.isolated_filesystem():
             self._add_config()
@@ -490,6 +556,9 @@ class TestMockedBrainCommand(TestCase):
             pf.save()
 
             result = self.runner.invoke(cli, ['push'])
+            self.assertTrue("bonsai_brain.bproj" in result.output)
+            self.assertTrue("test.txt" in result.output)
+            self.assertTrue("test2.txt" in result.output)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
 
     def test_brain_push_invalid_json(self):

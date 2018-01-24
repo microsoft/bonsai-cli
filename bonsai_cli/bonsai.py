@@ -505,8 +505,10 @@ def brain_push(brain, project):
         _raise_as_click_exception(e)
     else:
         num_files = len(response["files"])
-        click.echo("Push succeeded.  {} updated with {} files".format(
+        click.echo("Push succeeded. {} updated with {} files".format(
             brain, num_files))
+        for file in response["files"]:
+            click.echo("{}".format(file))
 
 
 def _validate_project_file(project_file):
@@ -515,6 +517,61 @@ def _validate_project_file(project_file):
         project_file.validate_content()
     except ProjectFileInvalidError as e:
         _raise_as_click_exception(e)
+
+
+@click.command("pull", help="Downloads project file(s) from a BRAIN.")
+@click.option("--all", is_flag=True,
+              help="Option to pull all files from targeted BRAIN.")
+@click.option("--brain", help="Override to target another BRAIN.")
+def brain_pull(all, brain):
+    """Pulls files related to the default BRAIN or the
+       BRAIN provided by the option."""
+    target_brain = brain if brain else _default_brain()
+
+    try:
+        click.echo("Pulling files from {}...".format(target_brain))
+        files = _api().get_brain_files(brain_name=target_brain)
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+
+    if not all:
+        files = _user_select(files)
+    _pull(files)
+
+
+def _pull(files):
+    """Pulls all files when all flag is used on brain_pull"""
+    # Save all files user wants to pull
+    for filename in files:
+        click.echo("Pulling \"{}\"".format(filename))
+        with open(filename, "wb") as outfile:
+            outfile.write(files[filename])
+
+    if len(files.keys()):
+        click.echo("Success! {} files were downloaded from the server."
+                   .format(len(files.keys())))
+    else:
+        click.echo("No files were downloaded from the server.")
+
+
+def _user_select(files):
+    """Prompts user if they want to pull a file and returns
+        the ones that they want to pull"""
+    yes = {'yes', 'y'}
+    no = {'no', 'n'}
+    user_selected_files = {}
+    for filename in files:
+        user_input = input("Do you want to pull \"{}\"? [Y/n]: "
+                           .format(filename)).lower()
+
+        # Keep looping until a proper response is given
+        while user_input not in yes and user_input not in no:
+            user_input = input("Please enter Yes/y or No/n: ").lower()
+
+        # Copy the user selected files to a new dict
+        if user_input in yes:
+            user_selected_files[filename] = files[filename]
+    return user_selected_files
 
 
 @click.command("download")
@@ -708,6 +765,7 @@ cli.add_command(bonsai_help)
 cli.add_command(brain_create_local)
 cli.add_command(brain_delete)
 cli.add_command(brain_push)
+cli.add_command(brain_pull)
 cli.add_command(brain_list)
 cli.add_command(brain_download)
 cli.add_command(brain_train)

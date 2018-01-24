@@ -28,7 +28,7 @@ _SIMS_INFO_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/sims"
 _SIMS_LOGS_URL_PATH_TEMPLATE = (
     "/v1/{username}/{brain}/{version}/sims/{sim}/logs")
 _SIM_LOGS_STREAM_URL_TEMPLATE = (
-    "/v1/{username}/{brain}/{version}/sims/{sim}/logs/ws")
+    "{ws_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs/ws")
 _STATUS_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/status"
 _TRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/train"
 _STOP_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/stop"
@@ -351,13 +351,15 @@ class BonsaiAPI(object):
         log.debug('Getting simulator logs follow for BRAIN %s for %s, '
                   'version=%s, sim=%s', brain_name, self._user_name, version,
                   sim)
-        url_path = _SIM_LOGS_STREAM_URL_TEMPLATE.format(
+        # NOTE: We do not use urljoin for this function as it is broken
+        #       for websocket urls in python 3.5.x
+        url = _SIM_LOGS_STREAM_URL_TEMPLATE.format(
+            ws_url=self._ws_url,
             username=self._user_name,
             brain=brain_name,
             version=version,
             sim=sim
         )
-        url = urljoin(self._ws_url, url_path)
         handler = LogStreamHandler(url, self._access_key)
         handler.run()
 

@@ -1,12 +1,23 @@
 # Changelog
 
+## 0.8.19
+### Added
+- Added `bonsai pull`.
+### Changed
+- `bonsai push` now lists the names of files that were pushed.
+### Fixed
+- `bonsai log --follow` for Python 3.5.x.
+
+## 0.8.18
+### Changed
+- Validates project JSON before creating or pushing project files.
+
 ## 0.8.17
 ### Changed
 - Lint fixes
 
 ## 0.8.16
 ### Changed
-
 - Added '-h' as another option for '--help' for all commands
 - Added top level 'help' command to cli
 - Added version checking to the --version option
