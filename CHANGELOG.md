@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.20
+### Added
+- Added `bonsai train resume [--remote]`
+### Changed
+- 'bonsai push' prints inkling errors.
+
 ## 0.8.19
 ### Added
 - Added `bonsai pull`.

@@ -32,6 +32,7 @@ _SIM_LOGS_STREAM_URL_TEMPLATE = (
 _STATUS_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/status"
 _TRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/train"
 _STOP_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/stop"
+_RESUME_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/{version}/resume"
 
 
 log = logging.getLogger(__name__)
@@ -649,6 +650,22 @@ class BonsaiAPI(object):
         )
         url = urljoin(self._api_url, url_path)
         return self._put(url=url)
+
+    def resume_training_brain(self, brain_name, brain_version, sim_local=True):
+        """
+        Resume training a BRAIN.
+        TODO:UPDATE DOCSTRING
+        """
+        log.debug('Resume training for BRAIN %s for %s',
+                  brain_name, self._user_name)
+        data = {} if sim_local else {'manage_simulator': True}
+        url_path = _RESUME_URL_PATH_TEMPLATE.format(
+            username=self._user_name,
+            brain=brain_name,
+            version=brain_version
+        )
+        url = urljoin(self._api_url, url_path)
+        return self._put(url=url, data=data)
 
 
 class LogStreamHandler(object):

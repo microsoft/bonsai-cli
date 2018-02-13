@@ -138,6 +138,26 @@ def _add_or_default_brain(directory, brain_name):
         click.echo("Brain {} is in '.brains'.".format(brain_name))
 
 
+def _check_dbrains(project=None):
+    """ Utility function to check if the dbrains file has been
+        modified. A valid dbrains file is in proper json format
+    """
+    try:
+        if project:
+            pf = ProjectFile.from_file_or_dir(project)
+            db = DotBrains(pf.directory())
+        else:
+            db = DotBrains()
+    except ValueError as err:
+        if project:
+            file_location = DotBrains.find_file(os.path.dirname(project))
+        else:
+            file_location = DotBrains.find_file(os.getcwd())
+        msg = "Bonsai Command Failed." \
+              "\nFailed to load .brains file '{}'".format(file_location)
+        _raise_as_click_exception(msg, err)
+
+
 def _show_version():
     click.echo("bonsai_cli %s" % __version__)
 
@@ -228,8 +248,9 @@ def configure(key):
     if key:
         access_key = key
     else:
+        key_url = bonsai_config.brain_api_url() + "/accounts/settings/key"
         access_key_message = ("You can get this access key from "
-                              "https://beta.bons.ai/accounts/settings/key")
+                              "{}").format(key_url)
         click.echo(access_key_message)
 
         access_key = click.prompt(
@@ -388,7 +409,7 @@ def _brain_create_err_msg(project):
                    '(e.g. "demos/cartpole").')
 def brain_create_local(brain_name, project, project_type):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
-
+    _check_dbrains(project)
     if project_type:
         # Create brain using project_type.
 
@@ -474,6 +495,7 @@ def brain_delete(brain_name):
               help="Override to target another project directory")
 def brain_push(brain, project):
     """Uploads project file(s) to a BRAIN."""
+    _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     directory = project if project else os.getcwd()
 
@@ -505,10 +527,11 @@ def brain_push(brain, project):
         _raise_as_click_exception(e)
     else:
         num_files = len(response["files"])
-        click.echo("Push succeeded. {} updated with {} files".format(
+        click.echo("Push succeeded. {} updated with {} files.".format(
             brain, num_files))
         for file in response["files"]:
             click.echo("{}".format(file))
+        _check_inkling(response["ink_compile"], bproj.inkling_file)
 
 
 def _validate_project_file(project_file):
@@ -519,6 +542,24 @@ def _validate_project_file(project_file):
         _raise_as_click_exception(e)
 
 
+def _check_inkling(inkling_info, inkling_file):
+    """ Prints inkling errors/warnings """
+    errors = inkling_info['errors']
+    warnings = inkling_info['warnings']
+    if errors or warnings:
+        click.echo("\n{} Errors, {} Warnings in {}".
+                   format(len(errors), len(warnings), inkling_file))
+        _print_inkling_errors_or_warnings(errors + warnings)
+
+
+def _print_inkling_errors_or_warnings(errors_or_warnings):
+    """ Helper function for printing inkling errors and/or warnings """
+    for key in errors_or_warnings:
+        click.echo("{} {} (line {}, column {})".
+                   format(key['code'], key['text'], key['line'],
+                          key['column']))
+
+
 @click.command("pull", help="Downloads project file(s) from a BRAIN.")
 @click.option("--all", is_flag=True,
               help="Option to pull all files from targeted BRAIN.")
@@ -526,6 +567,7 @@ def _validate_project_file(project_file):
 def brain_pull(all, brain):
     """Pulls files related to the default BRAIN or the
        BRAIN provided by the option."""
+    _check_dbrains()
     target_brain = brain if brain else _default_brain()
 
     try:
@@ -578,6 +620,7 @@ def _user_select(files):
 @click.argument("brain_name")
 def brain_download(brain_name):
     """Downloads all the files related to a BRAIN."""
+    _check_dbrains()
     _brain_download(brain_name, brain_name)
 
     _add_or_default_brain(brain_name, brain_name)
@@ -629,7 +672,7 @@ def brain_train():
               help='Override to target another project directory.')
 def sims_list(brain, project):
     """List the simulators connected to the BRAIN server."""
-
+    _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     try:
         content = _api().list_simulators(brain)
@@ -659,7 +702,7 @@ def sims_list(brain, project):
               help='Run a simulator remotely on Bonsai\'s servers.')
 def brain_train_start(brain, project, sim_local):
     """Trains the specified BRAIN."""
-
+    _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     try:
         content = _api().start_training_brain(brain, sim_local)
@@ -683,7 +726,7 @@ def brain_train_start(brain, project, sim_local):
               help='Override to target another project directory.')
 def brain_train_status(brain, json, project):
     """Gets training status on the specified BRAIN."""
-
+    _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     status = None
     try:
@@ -711,12 +754,37 @@ def brain_train_status(brain, json, project):
               help='Override to target another project directory.')
 def brain_train_stop(brain, project):
     """Stops training on the specified BRAIN."""
-
+    _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     click.echo("Stop training {}...".format(brain))
     try:
         _api().stop_training_brain(brain)
         click.echo("Stopped.")
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+
+
+@click.command("resume")
+@click.option("--brain",
+              help="Override to target another BRAIN")
+@click.option("--project",
+              help='Override to target another project directory.')
+@click.option("--remote", 'sim_local', flag_value=False, default=True,
+              help='Resume simulator remotely on Bonsai\'s servers.')
+def brain_train_resume(brain, project, sim_local):
+    """Resume training on the specified BRAIN."""
+    _check_dbrains(project)
+    brain = _brain_fallback(brain, project)
+    try:
+        content = _api().resume_training_brain(brain, 'latest', sim_local)
+        click.echo("Resuming training {}...".format(brain))
+        click.echo(
+            "When training completes, connect simulators to {}{} "
+            "for predictions".format(
+                BonsaiConfig().brain_websocket_url(),
+                content["simulator_predictions_url"]))
+    except KeyError:
+        pass
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
@@ -731,6 +799,7 @@ def brain_train_stop(brain, project):
               help="Continually follow simulator's output.")
 def brain_log(brain, project, follow):
     """Displays last 1000 lines of the running simulator's output."""
+    _check_dbrains(project)
     brain = _brain_fallback(brain, project)
 
     # TODO: extend for multiple simulators
@@ -782,6 +851,7 @@ sims.add_command(sims_list)
 brain_train.add_command(brain_train_start)
 brain_train.add_command(brain_train_status)
 brain_train.add_command(brain_train_stop)
+brain_train.add_command(brain_train_resume)
 
 
 def main():

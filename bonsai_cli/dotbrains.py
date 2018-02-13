@@ -6,6 +6,8 @@ be queried for the active brain.
 import os
 import json
 
+DEFAULT_FILE = '.brains'
+
 
 class BrainRef():
     """
@@ -40,6 +42,15 @@ class DotBrains():
         self.path = path
         self.brains = self._read()
 
+    @staticmethod
+    def find_file(directory):
+        """ Returns path of 1st .brains file found given directory. """
+        path = os.path.join(directory, DEFAULT_FILE)
+        if os.path.exists(path):
+            return path
+        else:
+            return None
+
     def _read(self):
         brains = []
         try:
@@ -47,7 +58,7 @@ class DotBrains():
             with open(path, 'r') as f:
                 b_obj = json.load(f, object_hook=BrainRef.from_json)
                 brains = b_obj.get('brains', [])
-        except (OSError, IOError, ValueError):
+        except (OSError, IOError):
             pass
         return brains
 

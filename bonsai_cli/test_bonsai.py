@@ -103,6 +103,17 @@ class TestMockedBrainCommand(TestCase):
         # should fail if directory/files already exist
         self.assertEqual(repeat_response.exit_code, FAILURE_EXIT_CODE)
 
+    def test_brain_download_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['download', 'mybrain'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
     def test_brain_pull_all(self):
         """Test that brain pull all pulles all files"""
         self.api.get_brain_files.return_value = {
@@ -168,6 +179,18 @@ class TestMockedBrainCommand(TestCase):
             result = self.runner.invoke(cli, ['pull'])
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue('Error: Missing brain name' in result.output)
+
+    def test_brain_pull_invalid_brains(self):
+        """ Test that brain pull fails with invalid .brains file """
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['pull'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
     def test_brain_delete(self):
         with self.runner.isolated_filesystem():
@@ -287,6 +310,17 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue("Unable to find" in result.output)
 
+    def test_brain_create_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['create', 'mybrain'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
     def test_brain_create_with_project_type(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         self.api.get_brain_files.return_value = {
@@ -399,6 +433,8 @@ class TestMockedBrainCommand(TestCase):
             # Run `bonsai configure`
             result = self.runner.invoke(cli, ['configure'], input=ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue(
+                'https://api.bons.ai/accounts/settings/key' in result.output)
 
             # Check ~/.bonsai
             with open(path, 'r') as f:
@@ -518,7 +554,8 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(brain_lines[0], ["brain_a", "Stopped"])
             self.assertEqual(brain_lines[1], ["brain_b", "Not Started"])
 
-    def test_brain_push(self):
+    @patch('bonsai_cli.bonsai._check_inkling', return_value=True)
+    def test_brain_push(self, patched_inkling_check):
         """ Tests `bonsai push` """
         def _side_effect_edit_brain(brain, project_file):
             # Checks arguments for BonsaiAPI.edit_brain(..) """
@@ -532,10 +569,12 @@ class TestMockedBrainCommand(TestCase):
             (payload, filesdata) = tempapi._payload_edit_brain(project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
             self.assertDictEqual(filesdata, {"test.txt": b'test content',
-                                             "test2.txt": b'test content 2'})
+                                             "test2.txt": b'test content 2',
+                                             "test3.ink": b'test content 3'})
             self.assertTrue("name" not in payload)
 
-            return {"files": ["bonsai_brain.bproj", "test.txt", "test2.txt"]}
+            return {"files": ["bonsai_brain.bproj", "test.txt", "test2.txt"],
+                    "ink_compile": "compiler_errors_and_warnings"}
         self.api.edit_brain = Mock(side_effect=_side_effect_edit_brain)
 
         with self.runner.isolated_filesystem():
@@ -548,11 +587,14 @@ class TestMockedBrainCommand(TestCase):
                 f1.write("test content")
             with open('test2.txt', 'w') as f2:
                 f2.write("test content 2")
+            with open('test3.ink', 'w') as f3:
+                f3.write("test content 3")
 
             # Write a project file
             pf = ProjectFile()
             pf.files.add('test.txt')
             pf.files.add('test2.txt')
+            pf.files.add('test3.ink')
             pf.save()
 
             result = self.runner.invoke(cli, ['push'])
@@ -594,6 +636,56 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue(result.output.startswith(
                 "Error: Unable to locate project file"))
 
+    def test_brain_push_invalid_inkling(self):
+        """ Tests that inkling errors are printed in bonsai push """
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            # Write some files.
+            with open('test.txt', 'w') as f1:
+                f1.write("test content")
+            with open('test2.txt', 'w') as f2:
+                f2.write("test content 2")
+            with open('test3.ink', 'w') as f3:
+                f3.write("test content 3")
+            pf = ProjectFile()
+            pf.files.add('test.txt')
+            pf.files.add('test2.txt')
+            pf.files.add('test3.ink')
+            pf.save()
+
+            mock_response = {
+                'files': ['test.txt', 'test2.txt', 'test3.ink'],
+                'ink_compile': {
+                    'errors': [{'code': 'Error.',
+                                'column': '1',
+                                'line': '2',
+                                'text': 'error message'}],
+                    'warnings': [{'code': 'Warning. ',
+                                  'column': '3',
+                                  'line': '4',
+                                  'text': 'warning message'}]}
+            }
+            self.api.edit_brain = Mock(return_value=mock_response)
+
+            result = self.runner.invoke(cli, ['push'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue('Error. ' in result.output)
+            self.assertTrue('Warning. ' in result.output)
+
+    def test_brain_push_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['push'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
     def test_project_option_brain_create(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         with self.runner.isolated_filesystem():
@@ -614,22 +706,26 @@ class TestMockedBrainCommand(TestCase):
                 cli, ['create', 'mybrain', '--project', 'subfolder'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
-    def test_project_option_brain_push(self):
+    @patch('bonsai_cli.bonsai._check_inkling', return_value=True)
+    def test_project_option_brain_push(self, patched_inkling_check):
         with self.runner.isolated_filesystem():
             self._add_config()
             self.api.edit_brain = Mock(
-                return_value={"files": [
-                    "bonsai_brain.bproj"
-                ]})
+                return_value={"files": ["bonsai_brain.bproj"],
+                              "ink_compile": "compiler_errors_or_warnings"}
+            )
             os.mkdir('subfolder')
             with open('subfolder/test.txt', 'w') as f1:
                 f1.write("test content")
+            with open('subfolder/test2.ink', 'w') as f2:
+                f2.write("test content 2")
 
             # Create a project in subfolder
             db = DotBrains('subfolder')
             db.add('mybrain')
             pf = ProjectFile.from_file_or_dir('subfolder')
             pf.files.add('test.txt')
+            pf.files.add('test2.ink')
             pf.save()
 
             result = self.runner.invoke(
@@ -701,6 +797,62 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.api.start_training_brain.assert_called_with("mybrain", False)
 
+    def test_train_start_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['train', 'start'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
+    def test_train_resume(self):
+        """ Tests `bonsai train resume` """
+        self.api.resume_training_brain = Mock(return_value={
+            'simulator_predictions_url': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'resume']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.api.resume_training_brain.assert_called_with("mybrain",
+                                                              "latest", True)
+
+    def test_train_resume_remote(self):
+        """ Tests `bonsai train resume --remote` """
+        self.api.resume_training_brain = Mock(return_value={
+            'simulator_predictions_url': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'resume', '--remote']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.api.resume_training_brain.assert_called_with("mybrain",
+                                                              "latest", False)
+
+    def test_train_resume_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['train', 'resume'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
     def test_brain_create_sets_default(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         with self.runner.isolated_filesystem():
@@ -767,6 +919,50 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_option_train_status(self):
         self._brain_option(['train', 'status'], self.api.get_brain_status)
+
+    def test_train_status_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['train', 'status'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
+    def test_train_stop_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['train', 'stop'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
+    def test_sims_list_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['sims', 'list'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
+    def test_bonsai_log_invalid_dotbrains(self):
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            invalid_brains = "{'brains': [{'brain'}}"
+            with open('.brains', 'w') as f1:
+                f1.write(invalid_brains)
+
+            result = self.runner.invoke(cli, ['log'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
     def _project_option(self, args, mock, extra_args=None):
         """ Common code for testing the project parameter flag """
