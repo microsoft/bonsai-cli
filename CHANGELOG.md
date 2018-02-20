@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.8.20
+## 0.8.21
 ### Added
 - Added `bonsai train resume [--remote]`
 ### Changed
