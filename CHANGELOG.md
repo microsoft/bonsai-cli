@@ -1,8 +1,19 @@
 # Changelog
 
+## 0.8.22
+### Added
+- Added `--json` flags to various commands
+- `bonsai switch --show` prints active profile information
+- `bonsai configure --show` prints active profile information
+
+### Changed
+- `bonsai switch -h/--help` prints available profiles and marks active profile if one exists
+- 'bonsai-config' replaced with sdk2 config
+
 ## 0.8.21
 ### Added
 - Added `bonsai train resume [--remote]`
+
 ### Changed
 - 'bonsai push' prints inkling errors.
 

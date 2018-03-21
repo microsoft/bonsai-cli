@@ -6,15 +6,16 @@ The `main` function in this file will be an entry point for execution
 as specified by setup.py.
 """
 import os
+import sys
 import time
 import logging
-from json import dumps, decoder
+from json import decoder, dumps
 
 import click
 import requests
 from tabulate import tabulate
 
-from bonsai_config import BonsaiConfig
+from bonsai_ai import Config
 from bonsai_cli.api import BonsaiAPI, BrainServerError
 from bonsai_cli import __version__
 from bonsai_cli.dotbrains import DotBrains
@@ -37,11 +38,11 @@ def _verify_required_configuration(bonsai_config):
     messages = []
     missing_config = False
 
-    if not bonsai_config.access_key():
+    if not bonsai_config.accesskey:
         messages.append("Your access key is not configured.")
         missing_config = True
 
-    if not bonsai_config.username():
+    if not bonsai_config.username:
         messages.append("Your username is not confgured.")
         missing_config = True
 
@@ -77,12 +78,12 @@ def _api():
     Convenience function for creating and returning an API object.
     :return: An API object.
     """
-    bonsai_config = BonsaiConfig()
+    bonsai_config = Config()
     _verify_required_configuration(bonsai_config)
-    return BonsaiAPI(access_key=bonsai_config.access_key(),
-                     user_name=bonsai_config.username(),
-                     api_url=bonsai_config.brain_api_url(),
-                     ws_url=bonsai_config.brain_websocket_url(),
+    return BonsaiAPI(access_key=bonsai_config.accesskey,
+                     user_name=bonsai_config.username,
+                     api_url=bonsai_config.url,
+                     ws_url=bonsai_config._websocket_url(),
                      )
 
 
@@ -120,22 +121,24 @@ def _brain_fallback(brain, project):
     return _default_brain()
 
 
-def _add_or_default_brain(directory, brain_name):
+def _add_or_default_brain(directory, brain_name, json=False):
     """
     Verifies that a .brains file exists for given brain_name.
     Will create .brains file if it doesn't exist
     :param directory: Path to check/create .brains at
     :param brain_name: BRAIN name to set as default
+    :param json: json flag from function that calls _add_or_default_brain
     """
     db = DotBrains(directory)
     brain = db.find(brain_name)
     if brain is None:
-        click.echo("Adding {} to '.brains', ".format(brain_name), nl=False)
+        if not json:
+            click.echo("Adding {} to '.brains', added".format(brain_name))
         db.add(brain_name)
-        click.echo("added.")
     else:
         db.set_default(brain)
-        click.echo("Brain {} is in '.brains'.".format(brain_name))
+        if not json:
+            click.echo("Brain {} is in '.brains'.".format(brain_name))
 
 
 def _check_dbrains(project=None):
@@ -199,18 +202,44 @@ def _check_version(ctx, param, value):
     user_cli_version = __version__
 
     if not pypi_version:
-        print('Bonsai ' + user_cli_version)
-        print('Unable to connect to PyPi and determine if CLI is up to date.')
+        click.echo('Bonsai ' + user_cli_version)
+        click.echo(
+            'Unable to connect to PyPi and determine if CLI is up to date.')
     elif user_cli_version != pypi_version:
-        print('Bonsai ' + user_cli_version)
-        print('Bonsai update available. The most recent version is : ' +
-              pypi_version)
-        print('Upgrade via pip using \'pip install --upgrade bonsai-cli\'')
+        click.echo('Bonsai ' + user_cli_version)
+        click.echo('Bonsai update available. The most recent version is : ' +
+                   pypi_version)
+        click.echo(
+            'Upgrade via pip using \'pip install --upgrade bonsai-cli\'')
     else:
-        print('Bonsai ' + user_cli_version)
-        print('Everything is up to date.')
+        click.echo('Bonsai ' + user_cli_version)
+        click.echo('Everything is up to date.')
 
     ctx.exit()
+
+
+def _list_profiles(bonsai_config):
+    """ Lists available profiles """
+    click.echo("\nAvailable Profiles:")
+    # Check for DEFAULT as it does not show up in section list
+    if bonsai_config._has_section("DEFAULT"):
+        click.echo("  DEFAULT")
+    # Grab Profiles from bonsai config and list each one
+    sections = bonsai_config._section_list()
+    for section in sections:
+        if section == bonsai_config.profile:
+            click.echo("  " + section + " (active)")
+        else:
+            click.echo("  " + section)
+
+
+def _print_profile_information(bonsai_config):
+    """ Print current active profile information """
+    items = bonsai_config._section_items(bonsai_config.profile)
+    click.echo("\nProfile Information")
+    click.echo("--------------------")
+    for key, val in items:
+        click.echo(key + ": " + val)
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
@@ -241,14 +270,15 @@ def brain():
 
 @click.command()
 @click.option('--key', help='Provide an access key.')
-def configure(key):
+@click.option('--show', is_flag=True,
+              help='Prints active profile information.')
+def configure(key, show):
     """Authenticate with the BRAIN Server."""
-    bonsai_config = BonsaiConfig()
-
+    bonsai_config = Config()
     if key:
         access_key = key
     else:
-        key_url = bonsai_config.brain_api_url() + "/accounts/settings/key"
+        key_url = bonsai_config.url + "/accounts/settings/key"
         access_key_message = ("You can get this access key from "
                               "{}").format(key_url)
         click.echo(access_key_message)
@@ -258,7 +288,7 @@ def configure(key):
 
     click.echo("Validating access key...")
     api = BonsaiAPI(access_key=access_key, user_name=None,
-                    api_url=bonsai_config.brain_api_url())
+                    api_url=bonsai_config.url)
     content = None
 
     try:
@@ -270,39 +300,57 @@ def configure(key):
         raise click.ClickException("Server did not return a username for "
                                    "access key {}".format(access_key))
     username = content['username']
-    bonsai_config.update_access_key_and_username(access_key, username)
+    bonsai_config._update(accesskey=access_key, username=username)
 
     click.echo("Success! Your username is {}".format(username))
+
+    if show:
+        _print_profile_information(bonsai_config)
 
 
 @click.command()
 @click.pass_context
-@click.argument("profile")
+@click.argument("profile", required=False)
 @click.option("--url", default=None, help="Set the brain api url.")
-def switch(ctx, profile, url):
+@click.option('--show', is_flag=True,
+              help="Prints active profile information")
+@click.option("--help", "-h", "help_option", is_flag=True,
+              help="Show this message and exit.")
+def switch(ctx, profile, url, show, help_option):
     """
     Change the active configuration section.\n
     For new profiles you must provide a url with the --url option.
     """
-    bonsai_config = BonsaiConfig()
-    section_exists = bonsai_config.check_section_exists(profile)
+    bonsai_config = Config(argv=sys.argv[0])
+    # `bonsai switch` and `bonsai switch -h/--help have the same output
+    if (not profile and not show) or help_option:
+        click.echo(ctx.get_help())
+        _list_profiles(bonsai_config)
+        ctx.exit(0)
+
+    if not profile and show:
+        _print_profile_information(bonsai_config)
+        ctx.exit(0)
 
     # Let the user know that when switching to a new profile
     # the --url option must be provided
+    section_exists = bonsai_config._has_section(profile)
     if not section_exists and not url:
         error = 'Profile not found.\n'
         error_msg = 'Please provide a url with the --url ' \
                     'option for new profiles'
-        print(error + error_msg)
+        click.echo(error + error_msg)
         ctx.exit(1)
 
-    bonsai_config.update(Profile=profile)
+    bonsai_config._update(profile=profile)
     if url:
-        bonsai_config.update(Url=url)
+        bonsai_config._update(url=url)
 
-    url = bonsai_config.brain_api_url()
+    url = bonsai_config.url
     click.echo("Success! Switched to {}. "
                "Commands will target: {}".format(profile, url))
+    if show:
+        _print_profile_information(bonsai_config)
 
 
 @click.group()
@@ -312,10 +360,18 @@ def sims():
 
 
 @click.command("list", short_help="Lists BRAINs owned by current user.")
-def brain_list():
+@click.option('--json', default=False, is_flag=True,
+              help='Output json.')
+def brain_list(json):
     """Lists BRAINs owned by current user."""
     try:
         content = _api().list_brains()
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+
+    if json:
+        click.echo(dumps(content, indent=4, sort_keys=True))
+    else:
         rows = []
         if content and 'brains' in content and len(content['brains']) > 0:
             # Try grabbing the default brain from .brains for later marking
@@ -340,8 +396,6 @@ def brain_list():
             click.echo(table)
         else:
             click.echo('The current user has not created any brains.')
-    except BrainServerError as e:
-        _raise_as_click_exception(e)
 
 
 # This command is currently disabled,
@@ -353,31 +407,36 @@ def brain_create(brain_name):
     brain_create_server(brain_name)
 
 
-def brain_create_server(brain_name, project_file=None, project_type=None):
+def brain_create_server(brain_name, project_file=None,
+                        project_type=None, json=None):
     try:
         brain_list = _api().list_brains()
         brains = brain_list['brains']
     except BrainServerError as e:
-        click.echo("Error:")
         _raise_as_click_exception(e)
 
     names = [b['name'] for b in brains]
     if brain_name in names:
         click.echo("Brain {} exists.".format(brain_name))
     else:
-        click.echo("Creating {}, ".format(brain_name), nl=False)
         try:
             if project_type:
-                _api().create_brain(brain_name, project_type=project_type)
+                response = _api().create_brain(brain_name,
+                                               project_type=project_type)
             elif project_file:
-                _api().create_brain(brain_name, project_file=project_file)
+                response = _api().create_brain(brain_name,
+                                               project_file=project_file)
             else:
-                _api().create_brain(brain_name)
+                # TODO: Dead code that is never reached in the logic
+                # TODO: Leaving it as it is part of the function signature
+                response = _api().create_brain(brain_name)
         except BrainServerError as e:
-            click.echo("error:")
             _raise_as_click_exception(e)
+
+        if json:
+            click.echo(dumps(response, indent=4, sort_keys=True))
         else:
-            click.echo("created.")
+            click.echo("Creating {}, created.".format(brain_name))
 
 
 def _is_empty_dir(dir):
@@ -407,8 +466,12 @@ def _brain_create_err_msg(project):
 @click.option("--project-type",
               help='Specify to download and use demo/starter project files '
                    '(e.g. "demos/cartpole").')
-def brain_create_local(brain_name, project, project_type):
+@click.option('--json', default=False, is_flag=True,
+              help='Output json.')
+def brain_create_local(brain_name, project, project_type, json):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
+    # TODO: Consider refactoring this function.
+    # TODO: Logic is starting to get convuluted.
     _check_dbrains(project)
     if project_type:
         # Create brain using project_type.
@@ -421,7 +484,7 @@ def brain_create_local(brain_name, project, project_type):
                        "Please run in an empty directory.")
             raise click.ClickException(message)
 
-        brain_create_server(brain_name, project_type=project_type)
+        brain_create_server(brain_name, project_type=project_type, json=json)
         _brain_download(brain_name, cur_dir)
         try:
             bproj = ProjectFile.from_file_or_dir(cur_dir)
@@ -441,16 +504,16 @@ def brain_create_local(brain_name, project, project_type):
 
         _validate_project_file(bproj)
 
-        brain_create_server(brain_name, project_file=bproj)
+        brain_create_server(brain_name, project_file=bproj, json=json)
 
-    _add_or_default_brain(bproj.directory(), brain_name)
-
+    _add_or_default_brain(bproj.directory(), brain_name, json=json)
     ProjectDefault.apply(bproj)
     bproj.save()
-    click.echo("Saving project file, saved.")
-    click.echo("")
-    click.echo("Run 'bonsai push' to push inkling and "
-               "training sources into {}.".format(brain_name))
+
+    if not json:
+        click.echo("Saving project file, saved.")
+        click.echo("\nRun 'bonsai push' to push inkling and "
+                   "training sources into {}.".format(brain_name))
 
 
 @click.command("delete",
@@ -465,7 +528,6 @@ def brain_delete(brain_name):
         brain_list = _api().list_brains()
         brains = brain_list['brains']
     except BrainServerError as e:
-        click.echo("Error:")
         _raise_as_click_exception(e)
 
     names = [b['name'] for b in brains]
@@ -481,7 +543,6 @@ def brain_delete(brain_name):
         try:
             _api().delete_brain(brain_name)
         except BrainServerError as e:
-            click.echo("Error:")
             _raise_as_click_exception(e)
         else:
             click.echo("deleted.")
@@ -493,7 +554,9 @@ def brain_delete(brain_name):
               help="Override to target another BRAIN.")
 @click.option("--project",
               help="Override to target another project directory")
-def brain_push(brain, project):
+@click.option('--json', default=False, is_flag=True,
+              help='Output json.')
+def brain_push(brain, project, json):
     """Uploads project file(s) to a BRAIN."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
@@ -516,16 +579,18 @@ def brain_push(brain, project):
 
     _validate_project_file(bproj)
 
-    # Upload file(s) based on project file
-    files = list(bproj._list_paths()) + [bproj.project_path]
-    click.echo("Uploading {} file(s) to {}... ".format(len(files), brain))
-    logging.debug("Uploading files=%s", files)
     try:
         response = _api().edit_brain(brain, bproj)
     except BrainServerError as e:
-        click.echo("error:")
         _raise_as_click_exception(e)
+
+    if json:
+        click.echo(dumps(response, indent=4, sort_keys=True))
     else:
+        # Upload file(s) based on project file
+        files = list(bproj._list_paths()) + [bproj.project_path]
+        click.echo("Uploading {} file(s) to {}... ".format(len(files), brain))
+        logging.debug("Uploading files=%s", files)
         num_files = len(response["files"])
         click.echo("Push succeeded. {} updated with {} files.".format(
             brain, num_files))
@@ -638,23 +703,24 @@ def _brain_download(brain_name, dest_dir):
     try:
         click.echo("Downloading files...")
         files = _api().get_brain_files(brain_name=brain_name)
-        with click.progressbar(files,
-                               bar_template='%(label)s %(info)s',
-                               label="Saving files...",
-                               item_show_func=lambda x: x,
-                               show_eta=False,
-                               show_pos=True) as files_wrapper:
-            for filename in files_wrapper:
-                # respect directories
-                file_path = os.path.join(dest_dir, filename)
-                dirname = os.path.dirname(file_path)
-                if dirname and not os.path.exists(dirname):
-                    os.makedirs(dirname)
-
-                with open(file_path, "wb") as outfile:
-                    outfile.write(files[filename])
     except BrainServerError as e:
         _raise_as_click_exception(e)
+
+    with click.progressbar(files,
+                           bar_template='%(label)s %(info)s',
+                           label="Saving files...",
+                           item_show_func=lambda x: x,
+                           show_eta=False,
+                           show_pos=True) as files_wrapper:
+        for filename in files_wrapper:
+            # respect directories
+            file_path = os.path.join(dest_dir, filename)
+            dirname = os.path.dirname(file_path)
+            if dirname and not os.path.exists(dirname):
+                os.makedirs(dirname)
+
+            with open(file_path, "wb") as outfile:
+                outfile.write(files[filename])
 
 
 @click.group("train", short_help="Start and stop training on a BRAIN.")
@@ -670,27 +736,35 @@ def brain_train():
               help="Override to target another BRAIN.")
 @click.option("--project",
               help='Override to target another project directory.')
-def sims_list(brain, project):
+@click.option('--json', default=False, is_flag=True,
+              help='Output json.')
+def sims_list(brain, project, json):
     """List the simulators connected to the BRAIN server."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
+
     try:
         content = _api().list_simulators(brain)
-        rows = []
-        click.echo("Simulators for {}:".format(brain))
-        for sim_name, sim_details in content.items():
-            rows.append([sim_name, 1, 'connected'])
-
-        table = tabulate(rows,
-                         headers=['NAME', 'INSTANCES', 'STATUS'],
-                         tablefmt='simple')
-        click.echo(table)
     except BrainServerError as e:
         _raise_as_click_exception(e)
-    except AttributeError as e:
-        err_msg = 'You have not started training.\n' \
-                  'Please run \'bonsai train start\' first.'
-        print(err_msg)
+
+    if json:
+        click.echo(dumps(content, indent=4, sort_keys=True))
+    else:
+        try:
+            click.echo("Simulators for {}:".format(brain))
+            rows = []
+            for sim_name, sim_details in content.items():
+                rows.append([sim_name, 1, 'connected'])
+
+            table = tabulate(rows,
+                             headers=['NAME', 'INSTANCES', 'STATUS'],
+                             tablefmt='simple')
+            click.echo(table)
+        except AttributeError as e:
+            err_msg = 'You have not started training.\n' \
+                        'Please run \'bonsai train start\' first.'
+            click.echo(err_msg)
 
 
 @click.command("start")
@@ -700,28 +774,35 @@ def sims_list(brain, project):
               help='Override to target another project directory.')
 @click.option("--remote", 'sim_local', flag_value=False, default=True,
               help='Run a simulator remotely on Bonsai\'s servers.')
-def brain_train_start(brain, project, sim_local):
+@click.option('--json', default=False, is_flag=True,
+              help='Output json.')
+def brain_train_start(brain, project, sim_local, json):
     """Trains the specified BRAIN."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     try:
         content = _api().start_training_brain(brain, sim_local)
-        click.echo("Start training {}...".format(brain))
-        click.echo(
-            "When training completes, connect simulators to {}{} "
-            "for predictions".format(
-                BonsaiConfig().brain_websocket_url(),
-                content["simulator_predictions_url"]))
-    except KeyError:
-        pass
     except BrainServerError as e:
         _raise_as_click_exception(e)
+
+    if json:
+        click.echo(dumps(content, indent=4, sort_keys=True))
+    else:
+        try:
+            click.echo("Start training {}...".format(brain))
+            click.echo(
+                "When training completes, connect simulators to {}{} "
+                "for predictions".format(
+                    Config()._websocket_url(),
+                    content["simulator_predictions_url"]))
+        except KeyError:
+            pass
 
 
 @click.command("status")
 @click.option("--brain", help="Override to target another BRAIN.")
 @click.option('--json', default=False, is_flag=True,
-              help='Output status as json.')
+              help='Output json.')
 @click.option("--project",
               help='Override to target another project directory.')
 def brain_train_status(brain, json, project):
@@ -734,10 +815,10 @@ def brain_train_status(brain, json, project):
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
-    click.echo("Status for {}:".format(brain))
     if json:
-        click.echo(dumps(status))
+        click.echo(dumps(status, indent=4, sort_keys=True))
     else:
+        click.echo("Status for {}:".format(brain))
         keys = list(status.keys())
         keys.sort()
         rows = ((k, status[k]) for k in keys)
@@ -752,16 +833,22 @@ def brain_train_status(brain, json, project):
               help="Override to target another BRAIN.")
 @click.option("--project",
               help='Override to target another project directory.')
-def brain_train_stop(brain, project):
+@click.option('--json', default=False, is_flag=True,
+              help='Output json.')
+def brain_train_stop(brain, project, json):
     """Stops training on the specified BRAIN."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
-    click.echo("Stop training {}...".format(brain))
     try:
-        _api().stop_training_brain(brain)
-        click.echo("Stopped.")
+        content = _api().stop_training_brain(brain)
     except BrainServerError as e:
         _raise_as_click_exception(e)
+
+    if json:
+        click.echo(dumps(content, indent=4, sort_keys=True))
+    else:
+        click.echo("Stop training {}...".format(brain))
+        click.echo("Stopped.")
 
 
 @click.command("resume")
@@ -771,54 +858,29 @@ def brain_train_stop(brain, project):
               help='Override to target another project directory.')
 @click.option("--remote", 'sim_local', flag_value=False, default=True,
               help='Resume simulator remotely on Bonsai\'s servers.')
-def brain_train_resume(brain, project, sim_local):
+@click.option("--json", default=False, is_flag=True,
+              help="Output json.")
+def brain_train_resume(brain, project, sim_local, json):
     """Resume training on the specified BRAIN."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     try:
         content = _api().resume_training_brain(brain, 'latest', sim_local)
-        click.echo("Resuming training {}...".format(brain))
-        click.echo(
-            "When training completes, connect simulators to {}{} "
-            "for predictions".format(
-                BonsaiConfig().brain_websocket_url(),
-                content["simulator_predictions_url"]))
-    except KeyError:
-        pass
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
-
-@click.command("log",
-               short_help="Display logs from remote training.")
-@click.option("--brain",
-              help="Override to target another BRAIN.")
-@click.option("--project",
-              help='Override to target another project directory.')
-@click.option("--follow", is_flag=True,
-              help="Continually follow simulator's output.")
-def brain_log(brain, project, follow):
-    """Displays last 1000 lines of the running simulator's output."""
-    _check_dbrains(project)
-    brain = _brain_fallback(brain, project)
-
-    # TODO: extend for multiple simulators
-    sims = ["1"]
-
-    click.echo("Simulator logs for {}:".format(brain))
-    if follow:
-        _api().get_simulator_logs_stream(brain, "latest", sims[0])
+    if json:
+        click.echo(dumps(content, indent=4, sort_keys=True))
     else:
         try:
-            log_lines = []
-            for sim in sims:
-                result = _api().get_simulator_logs(brain, "latest", sim)
-                log_lines.extend(result)
-        except BrainServerError as e:
-            _raise_as_click_exception(e)
-
-        for l in log_lines:
-            click.echo(l)
+            click.echo("Resuming training {}...".format(brain))
+            click.echo(
+                "When training completes, connect simulators to {}{} "
+                "for predictions".format(
+                    Config()._websocket_url(),
+                    content["simulator_predictions_url"]))
+        except KeyError:
+            pass
 
 
 # Compose the commands defined above.
@@ -838,7 +900,6 @@ cli.add_command(brain_pull)
 cli.add_command(brain_list)
 cli.add_command(brain_download)
 cli.add_command(brain_train)
-cli.add_command(brain_log)
 
 # The brain sub commands: create
 # This is disabled in favor of brain_create_local.

@@ -3,6 +3,7 @@ This file contains unit tests for bonsai command line.
 """
 import os
 from unittest import TestCase
+from json import loads
 
 # python 3.3+ includes mock in the unittest module
 try:
@@ -12,12 +13,12 @@ except ImportError:
 
 from click.testing import CliRunner
 
+from bonsai_ai import Config
 from bonsai_cli import __version__
 from bonsai_cli.api import BrainServerError, BonsaiAPI
 from bonsai_cli.bonsai import cli, _get_pypi_version
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
-from bonsai_config import BonsaiConfig
 
 SUCCESS_EXIT_CODE = 0
 FAILURE_EXIT_CODE = 1
@@ -77,8 +78,8 @@ class TestMockedBrainCommand(TestCase):
         ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
         USERNAME = 'admin'
 
-        config = BonsaiConfig()
-        config.update_access_key_and_username(ACCESS_KEY, USERNAME)
+        config = Config()
+        config._update(accesskey=ACCESS_KEY, username=USERNAME)
 
     def test_brain_download(self):
         self.api.get_brain_files.return_value = {
@@ -253,6 +254,19 @@ class TestMockedBrainCommand(TestCase):
                 cli, ['create', 'mybrain2'])
 
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+    def test_brain_create_json_option(self):
+        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.create_brain = Mock(return_value="{'brains': 'brains'}")
+        with self.runner.isolated_filesystem():
+            self._add_config()
+
+            # Create brain and local file
+            result = self.runner.invoke(
+                cli, ['create', 'mybrain', '--json'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            # Throws error if not valid json
+            loads(result.output)
 
     def test_brain_create_with_existing_project_file(self):
         def _side_effect_create_brain(brain, project_file=None,
@@ -430,11 +444,14 @@ class TestMockedBrainCommand(TestCase):
             if os.path.isfile(path):
                 os.remove(path)
 
+            # add a profile to .bonsai
+            self.runner.invoke(cli, ['switch', '--url', 'FOO', 'FIZZ'])
+
             # Run `bonsai configure`
             result = self.runner.invoke(cli, ['configure'], input=ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
-                'https://api.bons.ai/accounts/settings/key' in result.output)
+                'FOO/accounts/settings/key' in result.output)
 
             # Check ~/.bonsai
             with open(path, 'r') as f:
@@ -442,7 +459,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = https://api.bons.ai" in lines)
+                self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
 
     @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
@@ -452,23 +469,41 @@ class TestMockedBrainCommand(TestCase):
             if os.path.isfile(path):
                 os.remove(path)
 
+            # add a profile to .bonsai
+            result = self.runner.invoke(
+                cli, ['switch', '--url', 'FOO', 'FIZZ'])
             # Run `bonsai configure --key <some_key>`
             result = self.runner.invoke(cli,
                                         ['configure', '--key', ACCESS_KEY])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-
             # Check ~/.bonsai
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = https://api.bons.ai" in lines)
+                self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
 
-    @patch.object(BonsaiConfig, 'check_section_exists',
-                  create=True, return_value=False)
-    def test_bonsai_switch_new_profile(self, check_section_mock):
+    @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
+    def test_bonsai_configure_show_option(self, validate_mock):
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # add a profile to .bonsai
+            result = self.runner.invoke(cli,
+                                        ['switch', '--url', 'FOO', 'FIZZ'])
+            # Run `bonsai configure --show`
+            result = self.runner.invoke(cli, ['configure', '--show'],
+                                        input=ACCESS_KEY)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue(
+                'FOO' in result.output)
+            self.assertTrue('Profile Information' in result.output)
+
+    def test_bonsai_switch_new_profile(self):
         with self.runner.isolated_filesystem():
             path = os.path.expanduser('~/.bonsai')
             if os.path.isfile(path):
@@ -483,9 +518,7 @@ class TestMockedBrainCommand(TestCase):
             result = self.runner.invoke(cli, ['switch', 'FOO'])
             self.assertTrue("Profile not found" in result.output)
 
-    @patch.object(BonsaiConfig, 'check_section_exists',
-                  create=True, return_value=True)
-    def test_bonsai_switch_valid_profile(self, check_section_mock):
+    def test_bonsai_switch_valid_profile(self):
         with self.runner.isolated_filesystem():
             path = os.path.expanduser('~/.bonsai')
             if os.path.isfile(path):
@@ -495,6 +528,44 @@ class TestMockedBrainCommand(TestCase):
             result = self.runner.invoke(cli, ['switch', '--url', 'BAR', 'FOO'])
             result = self.runner.invoke(cli, ['switch', 'FOO'])
             self.assertTrue("Success!" in result.output)
+
+    def test_bonsai_switch_profile_with_show_option(self):
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # Create new profile and switch to it
+            result = self.runner.invoke(cli, ['switch', '--url', 'BAR', 'FOO'])
+            result = self.runner.invoke(cli, ['switch', '--show', 'FOO'])
+            self.assertTrue("Success!" in result.output)
+            self.assertTrue("Profile Information" in result.output)
+
+    def test_bonsai_switch_prints_available_profiles(self):
+        """ Test that `bonsai switch` prints Available Profiles """
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            # Create a new profile named Fizz and check output of cli
+            self.runner.invoke(cli, ['switch', 'FIZZ', '--url', 'bar'])
+            result = self.runner.invoke(cli, ['switch'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue("Available Profiles:" in result.output)
+            self.assertTrue("FIZZ" in result.output)
+
+    def test_bonsai_switch_show_prints_active_profile(self):
+        """ Test that `bonsai switch --show` prints Active Profile """
+        with self.runner.isolated_filesystem():
+            path = os.path.expanduser('~/.bonsai')
+            if os.path.isfile(path):
+                os.remove(path)
+
+            self.runner.invoke(cli, ['switch', 'FOO', '--url', 'bar'])
+            result = self.runner.invoke(cli, ['switch', '--show'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertTrue("Profile Information" in result.output)
 
     def test_brain_list_with_dotbrains(self):
         brains = [
@@ -554,6 +625,20 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(brain_lines[0], ["brain_a", "Stopped"])
             self.assertEqual(brain_lines[1], ["brain_b", "Not Started"])
 
+    def test_brain_list_json_option(self):
+        brains = [
+            {"name": "brain_a", "state": "Stopped"},
+            {"name": "brain_b", "state": "Not Started"}
+        ]
+        self.api.list_brains = Mock(return_value={"brains": brains})
+
+        with self.runner.isolated_filesystem():
+            # Run `bonsai list`
+            result = self.runner.invoke(cli, ['list', '--json'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            # Throws error if not valid json
+            loads(result.output)
+
     @patch('bonsai_cli.bonsai._check_inkling', return_value=True)
     def test_brain_push(self, patched_inkling_check):
         """ Tests `bonsai push` """
@@ -603,7 +688,58 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue("test2.txt" in result.output)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
 
-    def test_brain_push_invalid_json(self):
+    @patch('bonsai_cli.bonsai._check_inkling', return_value=True)
+    def test_brain_push_json_option(self, patched_inkling_check):
+        """ Tests `bonsai push` """
+        def _side_effect_edit_brain(brain, project_file):
+            # Checks arguments for BonsaiAPI.edit_brain(..) """
+            self.assertEqual(brain, "mybrain")
+            self.assertTrue(project_file.exists())
+            self.assertTrue('test.txt' in project_file.files)
+            self.assertTrue('test2.txt' in project_file.files)
+
+            # Checks payload/filesdata that will be sent.
+            tempapi = BonsaiAPI(None, None, None)
+            (payload, filesdata) = tempapi._payload_edit_brain(project_file)
+            self._check_payload(payload, ["test.txt", "test2.txt"])
+            self.assertDictEqual(filesdata, {"test.txt": b'test content',
+                                             "test2.txt": b'test content 2',
+                                             "test3.ink": b'test content 3'})
+            self.assertTrue("name" not in payload)
+
+            return {"files": ["bonsai_brain.bproj", "test.txt", "test2.txt"],
+                    "ink_compile": "compiler_errors_and_warnings"}
+        self.api.edit_brain = Mock(side_effect=_side_effect_edit_brain)
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            # Write some files.
+            with open('test.txt', 'w') as f1:
+                f1.write("test content")
+            with open('test2.txt', 'w') as f2:
+                f2.write("test content 2")
+            with open('test3.ink', 'w') as f3:
+                f3.write("test content 3")
+
+            # Write a project file
+            pf = ProjectFile()
+            pf.files.add('test.txt')
+            pf.files.add('test2.txt')
+            pf.files.add('test3.ink')
+            pf.save()
+
+            result = self.runner.invoke(cli, ['push', '--json'])
+            self.assertTrue("bonsai_brain.bproj" in result.output)
+            self.assertTrue("test.txt" in result.output)
+            self.assertTrue("test2.txt" in result.output)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
+            # Throws error if not valid json
+            loads(result.output)
+
+    def test_brain_push_invalid_json_in_projfile(self):
         """ Test bonsai push throws error when projfile
             is not in proper json format
         """
@@ -748,23 +884,6 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue("Unable to find" in result.output)
 
-    def test_sims_log(self):
-        """ Tests `bonsai log` . """
-        self.api.get_simulator_logs = Mock(return_value=['line1', 'line2'])
-
-        with self.runner.isolated_filesystem():
-            self._add_config()
-            db = DotBrains()
-            db.add('mybrain')
-
-            result = self.runner.invoke(cli, ['log'])
-            self.api.get_simulator_logs.assert_called_with(
-                "mybrain", "latest", "1")
-            self.assertEqual(result.output,
-                             'Simulator logs for mybrain:\nline1\nline2\n',
-                             result.output)
-            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
-
     def test_train_start(self):
         """ Tests `bonsai train start`"""
         self.api.start_training_brain = Mock(return_value={
@@ -808,6 +927,42 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
+    def test_train_start_json_option(self):
+        """ Tests `bonsai train start --json`"""
+        self.api.start_training_brain = Mock(return_value={
+            'simulator_predictions_url': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'start', '--json']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.api.start_training_brain.assert_called_with("mybrain", True)
+            # Throws error if not valid json
+            loads(result.output)
+
+    def test_train_stop_json_option(self):
+        """ Tests `bonsai train stop --json`"""
+        self.api.stop_training_brain = Mock(return_value={
+            'simulator_predictions_url': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'stop', '--json']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.api.stop_training_brain.assert_called_with("mybrain")
+            # Throws error if not valid json
+            loads(result.output)
+
     def test_train_resume(self):
         """ Tests `bonsai train resume` """
         self.api.resume_training_brain = Mock(return_value={
@@ -824,6 +979,25 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.api.resume_training_brain.assert_called_with("mybrain",
                                                               "latest", True)
+
+    def test_train_resume_json_option(self):
+        """ Tests `bonsai train resume --json` """
+        self.api.resume_training_brain = Mock(return_value={
+            'simulator_predictions_url': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'resume', '--json']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.api.resume_training_brain.assert_called_with("mybrain",
+                                                              "latest", True)
+            # Throws error if not valid json
+            loads(result.output)
 
     def test_train_resume_remote(self):
         """ Tests `bonsai train resume --remote` """
@@ -852,6 +1026,40 @@ class TestMockedBrainCommand(TestCase):
             result = self.runner.invoke(cli, ['train', 'resume'])
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue('Error: Bonsai Command Failed' in result.output)
+
+    def test_train_status_json_option(self):
+        """ Tests `bonsai train status --json` """
+        self.api.get_brain_status = Mock(return_value={
+            'status': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'status', '--json']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            # Throws error if not valid json
+            loads(result.output)
+
+    def test_sims_list_json_option(self):
+        """ Tests `bonsai sims list --json` """
+        self.api.get_brain_status = Mock(return_value={
+            'simulators': ''
+        })
+
+        with self.runner.isolated_filesystem():
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            args = ['train', 'status', '--json']
+            result = self.runner.invoke(cli, args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            # Throws error if not valid json
+            loads(result.output)
 
     def test_brain_create_sets_default(self):
         self.api.list_brains = Mock(return_value={'brains': []})
@@ -902,11 +1110,6 @@ class TestMockedBrainCommand(TestCase):
     def test_brain_option_sims_list(self):
         self._brain_option(['sims', 'list'], self.api.list_simulators)
 
-    def test_brain_option_sims_log(self):
-        # Expected arguments to api.get_simulator_logs()
-        extra_args = ["latest", "1"]
-        self._brain_option(['log'], self.api.get_simulator_logs, extra_args)
-
     def test_brain_option_train_start(self):
         # Expected arguments to api.start_training_brain()
         extra_args = [True]
@@ -953,17 +1156,6 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
-    def test_bonsai_log_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
-            self._add_config()
-            invalid_brains = "{'brains': [{'brain'}}"
-            with open('.brains', 'w') as f1:
-                f1.write(invalid_brains)
-
-            result = self.runner.invoke(cli, ['log'])
-            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
-            self.assertTrue('Error: Bonsai Command Failed' in result.output)
-
     def _project_option(self, args, mock, extra_args=None):
         """ Common code for testing the project parameter flag """
         extra_args = extra_args or []
@@ -996,11 +1188,6 @@ class TestMockedBrainCommand(TestCase):
 
     def test_project_option_sims_list(self):
         self._project_option(['sims', 'list'], self.api.list_simulators)
-
-    def test_project_option_sims_log(self):
-        # Expected arguments to api.get_simulator_logs()
-        extra_args = ["latest", "1"]
-        self._project_option(['log'], self.api.get_simulator_logs, extra_args)
 
     def test_project_option_with_brain(self):
         """ Project directory and brain both specified """

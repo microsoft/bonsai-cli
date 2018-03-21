@@ -1,4 +1,8 @@
+import functools
+import json
 import logging
+import os
+import sys
 
 try:
     from urllib.parse import urljoin
@@ -10,13 +14,11 @@ import email
 import requests
 import requests.exceptions
 from requests.compat import unquote
+from bonsai_cli import __version__
 
-import os
-import json
 from requests.packages.urllib3.fields import RequestField
 from requests.packages.urllib3.filepost import encode_multipart_formdata
 import websocket
-import functools
 
 _VALIDATE_URL_PATH = "/v1/validate"
 _LIST_BRAINS_URL_PATH_TEMPLATE = "/v1/{username}"
@@ -104,6 +106,9 @@ class BonsaiAPI(object):
     error, such as the failing response code and/or error message.
     """
 
+    # constant class variable for request timeout time in seconds
+    TIMEOUT = 30
+
     def __init__(self, access_key, user_name, api_url, ws_url=None):
         """
         Initializes the API object.
@@ -121,8 +126,24 @@ class BonsaiAPI(object):
         self._user_name = user_name
         self._api_url = api_url
         self._ws_url = ws_url
+        self._user_info = self._get_user_info()
         log.debug('API URL = %s', self._api_url)
         log.debug('WS URL = %s', self._ws_url)
+        log.debug('User Info = %s', self._user_info)
+
+    @staticmethod
+    def _get_user_info():
+        """ Get Information about user that will be passed into
+            The 'User-Agent' header with requests """
+        platform = sys.platform
+        python_version = "{}.{}.{}".format(
+            sys.version_info.major,
+            sys.version_info.minor,
+            sys.version_info.micro)
+        bonsai_cli_version = __version__
+        user_info = "bonsai-cli/{} (python {}; {})".format(
+            bonsai_cli_version, python_version, platform)
+        return user_info
 
     @_handles_connection_error
     def _post(self, url, data=None):
@@ -134,9 +155,11 @@ class BonsaiAPI(object):
         """
         log.debug('POST to %s with data %s...', url, str(data))
         response = requests.post(url=url,
-                                 headers={'Authorization': self._access_key},
+                                 headers={'Authorization': self._access_key,
+                                          'User-Agent': self._user_info},
                                  json=data,
-                                 allow_redirects=False)
+                                 allow_redirects=False,
+                                 timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
@@ -154,14 +177,16 @@ class BonsaiAPI(object):
                      to be used as the body.
         """
         log.debug('POST raw data to %s ...', url)
-        headers_out = {'Authorization': self._access_key}
+        headers_out = {'Authorization': self._access_key,
+                       'User-Agent': self._user_info}
         if headers:
             headers_out.update(headers)
 
         response = requests.post(url=url,
                                  headers=headers_out,
                                  data=data,
-                                 allow_redirects=False)
+                                 allow_redirects=False,
+                                 timeout=self.TIMEOUT)
 
         try:
             response.raise_for_status()
@@ -180,14 +205,16 @@ class BonsaiAPI(object):
                      to be used as the body.
         """
         log.debug('PUT raw data to %s ...', url)
-        headers_out = {'Authorization': self._access_key}
+        headers_out = {'Authorization': self._access_key,
+                       'User-Agent': self._user_info}
         if headers:
             headers_out.update(headers)
 
         response = requests.put(url=url,
                                 headers=headers_out,
                                 data=data,
-                                allow_redirects=False)
+                                allow_redirects=False,
+                                timeout=self.TIMEOUT)
 
         try:
             response.raise_for_status()
@@ -207,9 +234,11 @@ class BonsaiAPI(object):
         """
         log.debug('PUT to %s with data %s...', url, str(data))
         response = requests.put(url=url,
-                                headers={'Authorization': self._access_key},
+                                headers={'Authorization': self._access_key,
+                                         'User-Agent': self._user_info},
                                 json=data,
-                                allow_redirects=False)
+                                allow_redirects=False,
+                                timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
@@ -226,7 +255,9 @@ class BonsaiAPI(object):
         """
         log.debug('GET from %s...', url)
         response = requests.get(url=url,
-                                headers={'Authorization': self._access_key})
+                                headers={'Authorization': self._access_key,
+                                         'User-Agent': self._user_info},
+                                timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             log.debug('GET %s results:\n%s', url, response.text)
@@ -245,10 +276,12 @@ class BonsaiAPI(object):
         headers = {
             'Authorization': self._access_key,
             "Accept": "multipart/mixed",
-            'Accept-Encoding': 'base64'
+            'Accept-Encoding': 'base64',
+            'User-Agent': self._user_info
         }
         response = requests.get(url=url,
-                                headers=headers)
+                                headers=headers,
+                                timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             log.debug('GET %s results:\n%s', url, response.text)
@@ -286,8 +319,10 @@ class BonsaiAPI(object):
         """
         log.debug('DELETE %s...', url)
         response = requests.delete(url=url,
-                                   headers={'Authorization': self._access_key},
-                                   allow_redirects=False)
+                                   headers={'Authorization': self._access_key,
+                                            'User-Agent': self._user_info},
+                                   allow_redirects=False,
+                                   timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
