@@ -3,7 +3,8 @@ This file contains unit tests for bonsai command line.
 """
 import os
 from unittest import TestCase
-from json import loads
+from json import loads, dump
+from shutil import copyfile
 
 # python 3.3+ includes mock in the unittest module
 try:
@@ -11,6 +12,7 @@ try:
 except ImportError:
     from mock import Mock, patch
 
+from contextlib import contextmanager
 from click.testing import CliRunner
 
 from bonsai_ai import Config
@@ -25,6 +27,8 @@ FAILURE_EXIT_CODE = 1
 ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
 USERNAME = 'admin'
 
+BONSAI_BACKUP = './bonsai.bak'
+
 
 def _print_result(result):
     """Debugging method to print the output returned from click."""
@@ -34,31 +38,51 @@ def _print_result(result):
     traceback.print_tb(result.exc_info[2])
 
 
+@contextmanager
+def temp_filesystem(test_class):
+    """ Context manager that wraps CliRunner.isolated_filesystem().
+        It will set your $HOME directory to the temporary directory
+        created by the isolated_filesystem context manager
+
+        You must pass a class that has an instance of the CliRunner
+        instantiated as `runner`. This is a common pattern in the cli tests.
+
+        How to use:
+            with temp_filesystem():
+                YOUR CODE GOES HERE
+    """
+    with test_class.runner.isolated_filesystem():
+        # Change $HOME to current temp directory
+        temp_dir = os.getcwd()
+        home_dir = os.environ["HOME"] if "HOME" in os.environ else ""
+        os.environ["HOME"] = temp_dir
+
+        # Code in the scope of the context manager runs here
+        yield
+
+        # restore $HOME variable
+        os.environ["HOME"] = home_dir
+
+
 class TestBrainCommand(TestCase):
 
     def setUp(self):
-        self._clean_dotbonsai()
         self.runner = CliRunner()
 
-    def _clean_dotbonsai(self):
-        path = os.path.expanduser('~/.bonsai')
-        if os.path.isfile(path):
-            os.remove(path)
-
     def test_missing_access_key(self):
-        result = self.runner.invoke(cli, ['list'])
-
-        self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+        with temp_filesystem(self):
+            result = self.runner.invoke(cli, ['list'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
 
     def test_missing_parameter_create(self):
-        result = self.runner.invoke(cli, ['create'])
-
-        self.assertNotEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        with temp_filesystem(self):
+            result = self.runner.invoke(cli, ['create'])
+            self.assertNotEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
     def test_missing_parameter_delete(self):
-        result = self.runner.invoke(cli, ['delete'])
-
-        self.assertNotEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        with temp_filesystem(self):
+            result = self.runner.invoke(cli, ['delete'])
+            self.assertNotEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
 
 class TestMockedBrainCommand(TestCase):
@@ -87,7 +111,7 @@ class TestMockedBrainCommand(TestCase):
             'test2.txt': b'# test file 2'
         }
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             result = self.runner.invoke(
@@ -105,7 +129,7 @@ class TestMockedBrainCommand(TestCase):
         self.assertEqual(repeat_response.exit_code, FAILURE_EXIT_CODE)
 
     def test_brain_download_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -122,7 +146,7 @@ class TestMockedBrainCommand(TestCase):
             'test2.txt': b'# test file 2'
         }
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -141,7 +165,7 @@ class TestMockedBrainCommand(TestCase):
             'test2.txt': b'# test file 2'
         }
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -160,7 +184,7 @@ class TestMockedBrainCommand(TestCase):
             'test2.txt': b'# test file 2'
         }
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -173,7 +197,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_pull_fail(self):
         """Test that brain pull fails with appropriate Error Message"""
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
 
@@ -183,7 +207,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_pull_invalid_brains(self):
         """ Test that brain pull fails with invalid .brains file """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -194,7 +218,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
     def test_brain_delete(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             # Brain exists, delete succeeds
@@ -220,7 +244,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_create(self):
         self.api.list_brains = Mock(return_value={'brains': []})
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             # Create brain and local file
@@ -255,12 +279,25 @@ class TestMockedBrainCommand(TestCase):
 
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
+    def test_brain_create_default_brain(self):
+        self.api.list_brains = Mock(return_value={'brains': []})
+        with temp_filesystem(self):
+            with open('.brains', 'w') as fd:
+                dotbrains_dict = {
+                    "brains": [
+                        {"name": "mybrain",
+                         "default": True}
+                    ]
+                }
+                dump(dotbrains_dict, fd)
+            result = self.runner.invoke(cli, ['create'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
     def test_brain_create_json_option(self):
         self.api.list_brains = Mock(return_value={'brains': []})
         self.api.create_brain = Mock(return_value="{'brains': 'brains'}")
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
-
             # Create brain and local file
             result = self.runner.invoke(
                 cli, ['create', 'mybrain', '--json'])
@@ -289,7 +326,7 @@ class TestMockedBrainCommand(TestCase):
         self.api.list_brains = Mock(return_value={'brains': []})
         self.api.create_brain = Mock(side_effect=_side_effect_create_brain)
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -313,7 +350,7 @@ class TestMockedBrainCommand(TestCase):
     def test_brain_create_invalid_project_file(self):
         """ Tests graceful error if `bonsai create` is run where project file
         has invalid content. """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             pf = ProjectFile()
@@ -325,7 +362,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue("Unable to find" in result.output)
 
     def test_brain_create_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -342,7 +379,7 @@ class TestMockedBrainCommand(TestCase):
             'test2.txt': b'# test file 2'
         }
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             # Create brain using project-type arg.
@@ -377,7 +414,7 @@ class TestMockedBrainCommand(TestCase):
         self.api.create_brain = Mock(return_value={},
                                      side_effect=_side_effect_create_brain)
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             # Create brain using project-type arg
@@ -393,7 +430,7 @@ class TestMockedBrainCommand(TestCase):
     def test_brain_create_with_project_type_nonempty_directory(self):
         self.api.list_brains = Mock(return_value={'brains': []})
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             # Make it nonempty.
@@ -413,7 +450,7 @@ class TestMockedBrainCommand(TestCase):
         """ Test bonsai create throws error when projfile
             is not in proper json format
         """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             with open('bonsai_brain.bproj', 'w') as f:
@@ -439,11 +476,7 @@ class TestMockedBrainCommand(TestCase):
 
     @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
     def test_bonsai_configure(self, validate_mock):
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # add a profile to .bonsai
             self.runner.invoke(cli, ['switch', '--url', 'FOO', 'FIZZ'])
 
@@ -454,6 +487,7 @@ class TestMockedBrainCommand(TestCase):
                 'FOO/accounts/settings/key' in result.output)
 
             # Check ~/.bonsai
+            path = os.path.expanduser('~/.bonsai')
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
@@ -464,11 +498,7 @@ class TestMockedBrainCommand(TestCase):
 
     @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
     def test_bonsai_configure_key_option(self, validate_mock):
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # add a profile to .bonsai
             result = self.runner.invoke(
                 cli, ['switch', '--url', 'FOO', 'FIZZ'])
@@ -477,6 +507,7 @@ class TestMockedBrainCommand(TestCase):
                                         ['configure', '--key', ACCESS_KEY])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             # Check ~/.bonsai
+            path = os.path.expanduser('~/.bonsai')
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
@@ -487,11 +518,7 @@ class TestMockedBrainCommand(TestCase):
 
     @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
     def test_bonsai_configure_show_option(self, validate_mock):
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # add a profile to .bonsai
             result = self.runner.invoke(cli,
                                         ['switch', '--url', 'FOO', 'FIZZ'])
@@ -504,11 +531,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('Profile Information' in result.output)
 
     def test_bonsai_switch_new_profile(self):
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # Create a new profile with --url option
             result = self.runner.invoke(cli,
                                         ['switch', '--url', 'FOO', 'FIZZ'])
@@ -519,22 +542,14 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue("Profile not found" in result.output)
 
     def test_bonsai_switch_valid_profile(self):
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # Create new profile and switch to it
             result = self.runner.invoke(cli, ['switch', '--url', 'BAR', 'FOO'])
             result = self.runner.invoke(cli, ['switch', 'FOO'])
             self.assertTrue("Success!" in result.output)
 
     def test_bonsai_switch_profile_with_show_option(self):
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # Create new profile and switch to it
             result = self.runner.invoke(cli, ['switch', '--url', 'BAR', 'FOO'])
             result = self.runner.invoke(cli, ['switch', '--show', 'FOO'])
@@ -543,11 +558,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_bonsai_switch_prints_available_profiles(self):
         """ Test that `bonsai switch` prints Available Profiles """
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             # Create a new profile named Fizz and check output of cli
             self.runner.invoke(cli, ['switch', 'FIZZ', '--url', 'bar'])
             result = self.runner.invoke(cli, ['switch'])
@@ -557,11 +568,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_bonsai_switch_show_prints_active_profile(self):
         """ Test that `bonsai switch --show` prints Active Profile """
-        with self.runner.isolated_filesystem():
-            path = os.path.expanduser('~/.bonsai')
-            if os.path.isfile(path):
-                os.remove(path)
-
+        with temp_filesystem(self):
             self.runner.invoke(cli, ['switch', 'FOO', '--url', 'bar'])
             result = self.runner.invoke(cli, ['switch', '--show'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
@@ -574,7 +581,7 @@ class TestMockedBrainCommand(TestCase):
         ]
         self.api.list_brains = Mock(return_value={"brains": brains})
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             db = DotBrains()
             db.add('brain_a')
             db.add('brain_b')
@@ -596,7 +603,7 @@ class TestMockedBrainCommand(TestCase):
             # Check values. Note that the default brain is marked
             # NB: DotBrains defines the default brain as the last added
             self.assertEqual(brain_lines[0], ["brain_a", "Stopped"])
-            self.assertEqual(brain_lines[1], ["->", "brain_b", "Not Started"])
+            self.assertEqual(brain_lines[1], ["brain_b*", "Not", "Started"])
 
     def test_brain_list_no_dotbrains(self):
         brains = [
@@ -605,7 +612,7 @@ class TestMockedBrainCommand(TestCase):
         ]
         self.api.list_brains = Mock(return_value={"brains": brains})
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             # Run `bonsai list`
             result = self.runner.invoke(cli, ['list'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
@@ -632,7 +639,7 @@ class TestMockedBrainCommand(TestCase):
         ]
         self.api.list_brains = Mock(return_value={"brains": brains})
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             # Run `bonsai list`
             result = self.runner.invoke(cli, ['list', '--json'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
@@ -662,7 +669,7 @@ class TestMockedBrainCommand(TestCase):
                     "ink_compile": "compiler_errors_and_warnings"}
         self.api.edit_brain = Mock(side_effect=_side_effect_edit_brain)
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -711,7 +718,7 @@ class TestMockedBrainCommand(TestCase):
                     "ink_compile": "compiler_errors_and_warnings"}
         self.api.edit_brain = Mock(side_effect=_side_effect_edit_brain)
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -743,7 +750,7 @@ class TestMockedBrainCommand(TestCase):
         """ Test bonsai push throws error when projfile
             is not in proper json format
         """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -762,7 +769,7 @@ class TestMockedBrainCommand(TestCase):
         """ Tests there is graceful error  if `bonsai push` is run in
         directory without a project file.
         """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -774,7 +781,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_push_invalid_inkling(self):
         """ Tests that inkling errors are printed in bonsai push """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -812,7 +819,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('Warning. ' in result.output)
 
     def test_brain_push_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -824,7 +831,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_project_option_brain_create(self):
         self.api.list_brains = Mock(return_value={'brains': []})
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             os.mkdir('subfolder')
             with open('subfolder/test.txt', 'w') as f1:
@@ -844,7 +851,7 @@ class TestMockedBrainCommand(TestCase):
 
     @patch('bonsai_cli.bonsai._check_inkling', return_value=True)
     def test_project_option_brain_push(self, patched_inkling_check):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             self.api.edit_brain = Mock(
                 return_value={"files": ["bonsai_brain.bproj"],
@@ -871,7 +878,7 @@ class TestMockedBrainCommand(TestCase):
     def test_brain_push_invalid_project_file(self):
         """ Tests graceful error if `bonsai push` is run where project file
         has invalid content. """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -890,7 +897,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -906,7 +913,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -917,7 +924,7 @@ class TestMockedBrainCommand(TestCase):
             self.api.start_training_brain.assert_called_with("mybrain", False)
 
     def test_train_start_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -933,7 +940,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -951,7 +958,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -969,7 +976,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -986,7 +993,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -1005,7 +1012,7 @@ class TestMockedBrainCommand(TestCase):
             'simulator_predictions_url': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -1017,7 +1024,7 @@ class TestMockedBrainCommand(TestCase):
                                                               "latest", False)
 
     def test_train_resume_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -1033,7 +1040,7 @@ class TestMockedBrainCommand(TestCase):
             'status': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -1050,7 +1057,7 @@ class TestMockedBrainCommand(TestCase):
             'simulators': ''
         })
 
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             db = DotBrains()
             db.add('mybrain')
@@ -1063,7 +1070,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_brain_create_sets_default(self):
         self.api.list_brains = Mock(return_value={'brains': []})
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             db = DotBrains()
@@ -1085,7 +1092,7 @@ class TestMockedBrainCommand(TestCase):
         extra_args = extra_args or []
 
         mock.return_value = {}
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             # No Brain specified
@@ -1124,7 +1131,7 @@ class TestMockedBrainCommand(TestCase):
         self._brain_option(['train', 'status'], self.api.get_brain_status)
 
     def test_train_status_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -1135,7 +1142,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
     def test_train_stop_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -1146,7 +1153,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('Error: Bonsai Command Failed' in result.output)
 
     def test_sims_list_invalid_dotbrains(self):
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             invalid_brains = "{'brains': [{'brain'}}"
             with open('.brains', 'w') as f1:
@@ -1161,7 +1168,7 @@ class TestMockedBrainCommand(TestCase):
         extra_args = extra_args or []
 
         mock.return_value = {}
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             os.mkdir('subfolder')
             db = DotBrains('subfolder')
@@ -1193,7 +1200,7 @@ class TestMockedBrainCommand(TestCase):
         """ Project directory and brain both specified """
         mock = self.api.get_brain_status
         mock.return_value = {}
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             os.mkdir('subfolder')
             db = DotBrains('subfolder')
@@ -1208,7 +1215,7 @@ class TestMockedBrainCommand(TestCase):
 
     def test_project_option_missing_dotbrains(self):
         """ Project directory has no .brains file """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
             os.mkdir('subfolder')
 
@@ -1219,13 +1226,20 @@ class TestMockedBrainCommand(TestCase):
 
     def test_project_option_missing_directory(self):
         """ Project directory does not exist """
-        with self.runner.isolated_filesystem():
+        with temp_filesystem(self):
             self._add_config()
 
             args = ['train', 'status']
             args.extend(['--project', 'new_bogus_folder'])
             result = self.runner.invoke(cli, args)
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+
+    def test_timeout_option(self):
+        with temp_filesystem(self):
+            result = self.runner.invoke(cli, ['--timeout', 10, 'list'])
+            assert BonsaiAPI.TIMEOUT == 10
+            result = self.runner.invoke(cli, ['--timeout', 35, 'list'])
+            assert BonsaiAPI.TIMEOUT == 35
 
 
 class TestPyPiVersionRequest(TestCase):
@@ -1276,3 +1290,26 @@ class TestPyPiVersionRequest(TestCase):
         result = self.runner.invoke(cli, ['--version'])
         self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
         self.assertEqual(result.output, self.up_to_date_output)
+
+
+class TestSysInfo(TestCase):
+    """ Test cases for --sysinfo (top level option)"""
+    BONSAI_BACKUP = './bonsai.bak'
+
+    def setUp(self):
+        self.runner = CliRunner()
+
+    def test_sysinfo(self):
+        result = self.runner.invoke(cli, ['--sysinfo'])
+        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+        self.assertIn("Platform", result.output)
+        self.assertIn("Package", result.output)
+        self.assertIn("Profile", result.output)
+
+    def test_no_dotbonsai(self):
+        with temp_filesystem(self):
+            result = self.runner.invoke(cli, ['--sysinfo'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+
+            # assert that there is no profile info to print
+            self.assertEqual("-\n", result.output[-2:])

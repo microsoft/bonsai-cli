@@ -3,24 +3,11 @@ from setuptools import find_packages, setup
 
 from bonsai_cli import __version__
 
-# Get the long description from the README file
-# And also convert to reST
-try:
-    from pypandoc import convert
-
-    def read_md(f): return convert(f, 'rst')
-
-except ImportError:
-    print("warning: pypandoc module not found, "
-          "could not convert Markdown to RST")
-
-    def read_md(f): return open(f, 'r').read()
-
 setup(
     name='bonsai-cli',
     version=__version__,
     description='A python library for making API calls to Bonsai BRAIN.',
-    long_description=read_md('README.md'),
+    long_description=open('README.rst').read(),
     url='http://github.com/BonsaiAI/bonsai-cli',
     author='Bonsai Engineering',
     author_email='opensource@bons.ai',

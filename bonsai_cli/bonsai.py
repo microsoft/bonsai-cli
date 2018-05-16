@@ -6,6 +6,9 @@ The `main` function in this file will be an entry point for execution
 as specified by setup.py.
 """
 import os
+import pip
+import platform
+import pprint
 import sys
 import time
 import logging
@@ -218,6 +221,19 @@ def _check_version(ctx, param, value):
     ctx.exit()
 
 
+def _sysinfo(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo("\nPlatform Information\n--------------------")
+    click.echo(sys.version)
+    click.echo(platform.platform())
+    packages = pip.utils.get_installed_distributions()
+    click.echo("\nPackage Information\n-------------------")
+    click.echo(pprint.pformat(packages))
+    _print_profile_information(Config())
+    ctx.exit()
+
+
 def _list_profiles(bonsai_config):
     """ Lists available profiles """
     click.echo("\nAvailable Profiles:")
@@ -235,7 +251,11 @@ def _list_profiles(bonsai_config):
 
 def _print_profile_information(bonsai_config):
     """ Print current active profile information """
-    items = bonsai_config._section_items(bonsai_config.profile)
+    items = {}
+    try:
+        items = bonsai_config._section_items(bonsai_config.profile)
+    except Exception as e:
+        pass
     click.echo("\nProfile Information")
     click.echo("--------------------")
     for key, val in items:
@@ -246,13 +266,21 @@ def _print_profile_information(bonsai_config):
 @click.option('--debug/--no-debug', default=False,
               help='Enable/disable verbose debugging output.')
 @click.option('--version', is_flag=True, callback=_check_version,
-              help='Show the version and check if bonsai is up to date.',
+              help='Show the version and check if Bonsai is up to date.',
               expose_value=False, is_eager=True)
-def cli(debug):
+@click.option('--sysinfo', is_flag=True, callback=_sysinfo,
+              help='Show system information.',
+              expose_value=False, is_eager=True)
+@click.option('--timeout', type=int,
+              help='Set timeout for CLI API requests.')
+def cli(debug, timeout):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
     """
     log_level = logging.DEBUG if debug else logging.ERROR
     logging.basicConfig(level=log_level)
+
+    if timeout:
+        BonsaiAPI.TIMEOUT = timeout
 
 
 @click.command('help')
@@ -278,7 +306,10 @@ def configure(key, show):
     if key:
         access_key = key
     else:
-        key_url = bonsai_config.url + "/accounts/settings/key"
+        if bonsai_config.url == 'https://api.bons.ai':
+            key_url = 'https://beta.bons.ai/accounts/settings/key'
+        else:
+            key_url = bonsai_config.url + "/accounts/settings/key"
         access_key_message = ("You can get this access key from "
                               "{}").format(key_url)
         click.echo(access_key_message)
@@ -300,7 +331,8 @@ def configure(key, show):
         raise click.ClickException("Server did not return a username for "
                                    "access key {}".format(access_key))
     username = content['username']
-    bonsai_config._update(accesskey=access_key, username=username)
+    bonsai_config._update(accesskey=access_key, username=username,
+                          url=bonsai_config.url)
 
     click.echo("Success! Your username is {}".format(username))
 
@@ -385,8 +417,10 @@ def brain_list(json):
                 try:
                     name = item['name']
                     if name == default_brain:
-                        name = "-> " + name
-                    state = item['state']
+                        name = click.style(name + "*", bold=True)
+                        state = click.style(item['state'], bold=True)
+                    else:
+                        state = item['state']
                     rows.append([name, state])
                 except KeyError:
                     pass  # If it's missing a field, ignore it.
@@ -460,7 +494,8 @@ def _brain_create_err_msg(project):
 
 @click.command("create",
                short_help="Create a BRAIN and set the default BRAIN.")
-@click.argument("brain_name")
+@click.pass_context
+@click.argument("brain_name", default='', required=True)
 @click.option("--project",
               help='Override to target another project directory.')
 @click.option("--project-type",
@@ -468,11 +503,21 @@ def _brain_create_err_msg(project):
                    '(e.g. "demos/cartpole").')
 @click.option('--json', default=False, is_flag=True,
               help='Output json.')
-def brain_create_local(brain_name, project, project_type, json):
+def brain_create_local(ctx, brain_name, project, project_type, json):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
     # TODO: Consider refactoring this function.
     # TODO: Logic is starting to get convuluted.
     _check_dbrains(project)
+
+    # if the brain_name was left blank, try to pull one from .brains
+    # if none available, raise UsageError and abort
+    if brain_name == '':
+        default = DotBrains().get_default()
+        if default is None:
+            raise click.UsageError(ctx.get_usage())
+        else:
+            brain_name = default.name
+
     if project_type:
         # Create brain using project_type.
 

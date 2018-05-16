@@ -107,7 +107,7 @@ class BonsaiAPI(object):
     """
 
     # constant class variable for request timeout time in seconds
-    TIMEOUT = 30
+    TIMEOUT = 300
 
     def __init__(self, access_key, user_name, api_url, ws_url=None):
         """

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+### Added
+- `--sysinfo` top level option to print system information
+- `--timeout` top level option to modify api request timeout time
+
+### Changed
+- CLI unittests preserve local .bonsai
+
 ## 0.8.22
 ### Added
 - Added `--json` flags to various commands
