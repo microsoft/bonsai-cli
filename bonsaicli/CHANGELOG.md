@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.24
+### Changed
+- `bonsai push` fails and prints error message while brain is training
+
 ## 0.8.23
 ### Added
 - `--sysinfo` top level option to print system information

@@ -2,10 +2,10 @@ FROM python:3.5-slim
 
 RUN apt-get update && \
     apt-get install -y python2.7
-
 RUN pip install tox
 
-WORKDIR /brain
 COPY src/sdk2/bonsai-ai /brain/src/sdk2/bonsai-ai
 COPY src/bonsaicli /brain/src/bonsaicli
-RUN tox -c /brain/src/bonsaicli
+
+WORKDIR /brain/src/bonsaicli
+RUN tox --notest

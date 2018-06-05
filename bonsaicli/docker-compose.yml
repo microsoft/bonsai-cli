@@ -7,5 +7,4 @@ services:
       dockerfile: src/bonsaicli/Dockerfile.test
       context: ../..
     tty: true
-    entrypoint: bash
-    network_mode: none
+    entrypoint: ['tox']

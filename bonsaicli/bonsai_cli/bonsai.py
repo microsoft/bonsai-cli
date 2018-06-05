@@ -631,6 +631,14 @@ def brain_push(brain, project, json):
         logging.debug("Uploading files=%s", files)
 
     try:
+        status = _api().get_brain_status(brain)
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+    if status['state'] == 'In Progress':
+        _raise_as_click_exception(
+            "Can't push while training. Please stop training first.")
+
+    try:
         response = _api().edit_brain(brain, bproj)
     except BrainServerError as e:
         _raise_as_click_exception(e)

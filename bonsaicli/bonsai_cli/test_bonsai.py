@@ -668,6 +668,8 @@ class TestMockedBrainCommand(TestCase):
             return {"files": ["bonsai_brain.bproj", "test.txt", "test2.txt"],
                     "ink_compile": "compiler_errors_and_warnings"}
         self.api.edit_brain = Mock(side_effect=_side_effect_edit_brain)
+        self.api.get_brain_status = Mock(
+            return_value={'state': 'Not Started'})
 
         with temp_filesystem(self):
             self._add_config()
@@ -717,6 +719,8 @@ class TestMockedBrainCommand(TestCase):
             return {"files": ["bonsai_brain.bproj", "test.txt", "test2.txt"],
                     "ink_compile": "compiler_errors_and_warnings"}
         self.api.edit_brain = Mock(side_effect=_side_effect_edit_brain)
+        self.api.get_brain_status = Mock(
+            return_value={'state': 'Not Started'})
 
         with temp_filesystem(self):
             self._add_config()
@@ -745,6 +749,31 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE, result)
             # Throws error if not valid json
             loads(result.output)
+
+    def test_brain_push_during_training(self):
+        self.api.get_brain_status = Mock(return_value={'state': 'In Progress'})
+        with temp_filesystem(self):
+            self._add_config()
+            db = DotBrains()
+            db.add('mybrain')
+
+            # Write some files.
+            with open('test.txt', 'w') as f1:
+                f1.write("test content")
+            with open('test2.txt', 'w') as f2:
+                f2.write("test content 2")
+            with open('test3.ink', 'w') as f3:
+                f3.write("test content 3")
+
+            # Write a project file
+            pf = ProjectFile()
+            pf.files.add('test.txt')
+            pf.files.add('test2.txt')
+            pf.files.add('test3.ink')
+            pf.save()
+
+            result = self.runner.invoke(cli, ['push'])
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
 
     def test_brain_push_invalid_json_in_projfile(self):
         """ Test bonsai push throws error when projfile
@@ -812,6 +841,8 @@ class TestMockedBrainCommand(TestCase):
                                   'text': 'warning message'}]}
             }
             self.api.edit_brain = Mock(return_value=mock_response)
+            self.api.get_brain_status = Mock(
+                return_value={'state': 'Not Started'})
 
             result = self.runner.invoke(cli, ['push'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
@@ -856,6 +887,8 @@ class TestMockedBrainCommand(TestCase):
                     "url": "/v1/admin/brain1"
                 }
             self.api.edit_brain = Mock(return_value=mock_response)
+            self.api.get_brain_status = Mock(
+                return_value={'state': 'Not Started'})
 
             result = self.runner.invoke(cli, ['push'])
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
@@ -896,6 +929,8 @@ class TestMockedBrainCommand(TestCase):
     def test_project_option_brain_push(self, patched_inkling_check):
         with temp_filesystem(self):
             self._add_config()
+            self.api.get_brain_status = Mock(
+                return_value={'state': 'Not Started'})
             self.api.edit_brain = Mock(
                 return_value={"files": ["bonsai_brain.bproj"],
                               "ink_compile": "compiler_errors_or_warnings"}
