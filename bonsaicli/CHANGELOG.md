@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.25
+- Update bonsai configure for new validate endpoint
+- Make testing logs quieter
+- use raw_input with python2, input is okay with python3
+- update http to https for all setup.py
+
+## Added
+- `--username` option for configure
+
+### Changed
+- `bonsai configure` prompts for username and access key
+- `--key` option for configure changed to `--access_key`
+
 ## 0.8.24
 ### Changed
 - `bonsai push` fails and prints error message while brain is training

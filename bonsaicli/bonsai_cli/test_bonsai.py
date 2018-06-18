@@ -157,7 +157,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test.txt' in files)
             self.assertTrue('test2.txt' in files)
 
-    @patch('bonsai_cli.bonsai.input', return_value='yes')
+    @patch('bonsai_cli.bonsai.prompt_user', return_value='yes')
     def test_brain_pull_yes(self, patched_input):
         """Test files are pulled when answering yes during bonsai pull"""
         self.api.get_brain_files.return_value = {
@@ -176,7 +176,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test.txt' in files)
             self.assertTrue('test2.txt' in files)
 
-    @patch('bonsai_cli.bonsai.input', return_value='no')
+    @patch('bonsai_cli.bonsai.prompt_user', return_value='no')
     def test_brain_pull_no(self, patched_input):
         """Test files are not pulled when answering no during bonsai pull"""
         self.api.get_brain_files.return_value = {
@@ -474,14 +474,15 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue(f in payload["project_accompanying_files"],
                             "f={} project_accompanying_files field".format(f))
 
-    @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
+    @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure(self, validate_mock):
         with temp_filesystem(self):
             # add a profile to .bonsai
             self.runner.invoke(cli, ['switch', '--url', 'FOO', 'FIZZ'])
 
             # Run `bonsai configure`
-            result = self.runner.invoke(cli, ['configure'], input=ACCESS_KEY)
+            result = self.runner.invoke(
+                cli, ['configure'], input=USERNAME + '\n' + ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
                 'FOO/accounts/settings/key' in result.output)
@@ -496,15 +497,15 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
+    @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure_key_option(self, validate_mock):
         with temp_filesystem(self):
             # add a profile to .bonsai
             result = self.runner.invoke(
                 cli, ['switch', '--url', 'FOO', 'FIZZ'])
             # Run `bonsai configure --key <some_key>`
-            result = self.runner.invoke(cli,
-                                        ['configure', '--key', ACCESS_KEY])
+            result = self.runner.invoke(
+                cli, ['configure', '--access_key', ACCESS_KEY], input=USERNAME)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             # Check ~/.bonsai
             path = os.path.expanduser('~/.bonsai')
@@ -516,7 +517,33 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={'username': USERNAME})
+    @patch.object(BonsaiAPI, 'validate', return_value={})
+    def test_bonsai_configure_username_and_key_option(self, validate_mock):
+        with temp_filesystem(self):
+            # add a profile to .bonsai
+            result = self.runner.invoke(
+                cli, ['switch', '--url', 'FOO', 'FIZZ'])
+            # Run `bonsai configure --key <some_key>`
+            cli_args = [
+                'configure',
+                '--username',
+                USERNAME,
+                '--access_key',
+                ACCESS_KEY
+            ]
+            result = self.runner.invoke(cli, cli_args)
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            # Check ~/.bonsai
+            path = os.path.expanduser('~/.bonsai')
+            with open(path, 'r') as f:
+                result = f.read()
+                lines = result.split("\n")
+
+                self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
+                self.assertTrue("url = FOO" in lines)
+                self.assertTrue("username = {}".format(USERNAME) in lines)
+
+    @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure_show_option(self, validate_mock):
         with temp_filesystem(self):
             # add a profile to .bonsai
@@ -524,7 +551,7 @@ class TestMockedBrainCommand(TestCase):
                                         ['switch', '--url', 'FOO', 'FIZZ'])
             # Run `bonsai configure --show`
             result = self.runner.invoke(cli, ['configure', '--show'],
-                                        input=ACCESS_KEY)
+                                        input=USERNAME + '\n' + ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
                 'FOO' in result.output)

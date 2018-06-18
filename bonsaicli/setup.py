@@ -8,7 +8,7 @@ setup(
     version=__version__,
     description='A python library for making API calls to Bonsai BRAIN.',
     long_description=open('README.rst').read(),
-    url='http://github.com/BonsaiAI/bonsai-cli',
+    url='https://github.com/BonsaiAI/bonsai-cli',
     author='Bonsai Engineering',
     author_email='opensource@bons.ai',
     license='BSD',

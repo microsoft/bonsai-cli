@@ -155,8 +155,8 @@ class BonsaiAPI(object):
         """
         log.debug('POST to %s with data %s...', url, str(data))
         response = requests.post(url=url,
-                                 headers={'Authorization': self._access_key,
-                                          'User-Agent': self._user_info},
+                                 auth=(self._user_name, self._access_key),
+                                 headers={'User-Agent': self._user_info},
                                  json=data,
                                  allow_redirects=False,
                                  timeout=self.TIMEOUT)

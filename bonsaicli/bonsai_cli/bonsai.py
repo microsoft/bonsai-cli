@@ -25,6 +25,12 @@ from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectDefault
 from bonsai_cli.projfile import ProjectFile, ProjectFileInvalidError
 
+
+# Use input with Python3 and raw_input with Python2
+prompt_user = input
+if sys.version[0] == '2':
+    prompt_user = raw_input
+
 """ Global variable for click context settings following the conventions
 from the click documentation. It can be modified to add more context
 settings if they are needed in future development of the cli.
@@ -297,15 +303,18 @@ def brain():
 
 
 @click.command()
-@click.option('--key', help='Provide an access key.')
+@click.option('--username', help='Provide username.')
+@click.option('--access_key', help='Provide an access key.')
 @click.option('--show', is_flag=True,
               help='Prints active profile information.')
-def configure(key, show):
+def configure(username, access_key, show):
     """Authenticate with the BRAIN Server."""
     bonsai_config = Config()
-    if key:
-        access_key = key
-    else:
+
+    if not username:
+        username = click.prompt("Username")
+
+    if not access_key:
         if bonsai_config.url == 'https://api.bons.ai':
             key_url = 'https://beta.bons.ai/accounts/settings/key'
         else:
@@ -313,12 +322,11 @@ def configure(key, show):
         access_key_message = ("You can get this access key from "
                               "{}").format(key_url)
         click.echo(access_key_message)
-
         access_key = click.prompt(
             "Access Key (typing will be hidden)", hide_input=True)
 
     click.echo("Validating access key...")
-    api = BonsaiAPI(access_key=access_key, user_name=None,
+    api = BonsaiAPI(access_key=access_key, user_name=username,
                     api_url=bonsai_config.url)
     content = None
 
@@ -326,11 +334,6 @@ def configure(key, show):
         content = api.validate()
     except BrainServerError as e:
         _raise_as_click_exception(e)
-
-    if 'username' not in content:
-        raise click.ClickException("Server did not return a username for "
-                                   "access key {}".format(access_key))
-    username = content['username']
     bonsai_config._update(accesskey=access_key, username=username,
                           url=bonsai_config.url)
 
@@ -728,12 +731,12 @@ def _user_select(files):
     no = {'no', 'n'}
     user_selected_files = {}
     for filename in files:
-        user_input = input("Do you want to pull \"{}\"? [Y/n]: "
-                           .format(filename)).lower()
+        user_input = prompt_user("Do you want to pull \"{}\"? [Y/n]: "
+                                 .format(filename)).lower()
 
         # Keep looping until a proper response is given
         while user_input not in yes and user_input not in no:
-            user_input = input("Please enter Yes/y or No/n: ").lower()
+            user_input = prompt_user("Please enter Yes/y or No/n: ").lower()
 
         # Copy the user selected files to a new dict
         if user_input in yes:

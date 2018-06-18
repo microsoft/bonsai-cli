@@ -44,8 +44,8 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_post.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate')
@@ -69,8 +69,8 @@ class TestBonsaiApi(TestCase):
         self.tempapi.validate()
         mock_post.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate'
@@ -79,8 +79,8 @@ class TestBonsaiApi(TestCase):
         self.tempapi.validate()
         mock_post.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate'
@@ -106,8 +106,8 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_post.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate'
@@ -130,8 +130,8 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_post.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json={'name': 'fakename'},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/brains'
@@ -155,8 +155,8 @@ class TestBonsaiApi(TestCase):
         self.tempapi.create_brain('foo')
         mock_post.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json={'name': 'foo'},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/brains'
@@ -165,8 +165,8 @@ class TestBonsaiApi(TestCase):
         self.tempapi.create_brain('bar')
         mock_post.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json={'name': 'bar'},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/brains'
@@ -187,8 +187,8 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_post.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            auth=('fakeuser', 'fakekey'),
+            headers={'User-Agent': self.tempapi._user_info},
             json={'name': 'fakename',
                   'project_type': 'projtype'},
             timeout=self.timeout,
