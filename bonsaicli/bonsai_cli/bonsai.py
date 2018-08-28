@@ -11,19 +11,22 @@ import platform
 import pprint
 import sys
 import time
-import logging
 from json import decoder, dumps
+from configparser import NoSectionError
 
 import click
 import requests
 from tabulate import tabulate
+from click._compat import get_text_stderr
 
 from bonsai_ai import Config
+from bonsai_ai.logger import Logger
 from bonsai_cli.api import BonsaiAPI, BrainServerError
 from bonsai_cli import __version__
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectDefault
-from bonsai_cli.projfile import ProjectFile, ProjectFileInvalidError
+from bonsai_cli.projfile import (
+    ProjectFile, ProjectFileInvalidError, FileTooLargeError)
 
 
 # Use input with Python3 and raw_input with Python2
@@ -31,11 +34,31 @@ prompt_user = input
 if sys.version[0] == '2':
     prompt_user = raw_input
 
+log = Logger()
+
 """ Global variable for click context settings following the conventions
 from the click documentation. It can be modified to add more context
 settings if they are needed in future development of the cli.
 """
 CONTEXT_SETTINGS = dict(help_option_names=['--help', '-h'])
+
+
+class CustomClickException(click.ClickException):
+    """ Custom click exception that prints exceptions in color """
+    def __init__(self, message, color):
+        click.ClickException.__init__(self, message)
+        self.color = color
+
+    def show(self, file=None):
+        """ Override ClickException function show() to print in color """
+        if file is None:
+            file = get_text_stderr()
+
+        if self.color:
+            click.secho(
+                'ERROR: %s' % self.format_message(), file=file, fg='red')
+        else:
+            click.echo('ERROR: %s' % self.format_message(), file=file)
 
 
 def _verify_required_configuration(bonsai_config):
@@ -70,16 +93,24 @@ def _raise_as_click_exception(*args):
     This function expects to be handed a BrainServerError, an Exception (or
     one of its subclasses), or a message string followed by an Exception.
     """
+    try:
+        config = Config()
+        color = config.use_color
+    except ValueError:
+        color = False
+
     if args and len(args) == 1:
         if isinstance(args[0], BrainServerError):
-            raise click.ClickException(str(args[0]))
+            raise CustomClickException(str(args[0]), color=color)
         else:
-            raise click.ClickException('An error occurred\n'
-                                       'Details: {}'.format(str(args[0])))
+            raise CustomClickException('An error occurred\n'
+                                       'Details: {}'.format(str(args[0])),
+                                       color=color)
     elif args and len(args) > 1:
-        raise click.ClickException("{}\nDetails: {}".format(args[0], args[1]))
+        raise CustomClickException("{}\nDetails: {}".format(args[0], args[1]),
+                                   color=color)
     else:
-        raise click.ClickException("An error occurred")
+        raise CustomClickException("An error occurred", color=color)
 
 
 def _api():
@@ -130,7 +161,7 @@ def _brain_fallback(brain, project):
     return _default_brain()
 
 
-def _add_or_default_brain(directory, brain_name, json=False):
+def _add_or_default_brain(directory, brain_name):
     """
     Verifies that a .brains file exists for given brain_name.
     Will create .brains file if it doesn't exist
@@ -141,13 +172,11 @@ def _add_or_default_brain(directory, brain_name, json=False):
     db = DotBrains(directory)
     brain = db.find(brain_name)
     if brain is None:
-        if not json:
-            click.echo("Adding {} to '.brains', added".format(brain_name))
+        log.debug("Adding {} to '.brains', added".format(brain_name))
         db.add(brain_name)
     else:
         db.set_default(brain)
-        if not json:
-            click.echo("Brain {} is in '.brains'.".format(brain_name))
+        log.debug("Brain {} is in '.brains'.".format(brain_name))
 
 
 def _check_dbrains(project=None):
@@ -242,14 +271,17 @@ def _sysinfo(ctx, param, value):
 
 def _list_profiles(bonsai_config):
     """ Lists available profiles """
+    profile = bonsai_config.profile
     click.echo("\nAvailable Profiles:")
-    # Check for DEFAULT as it does not show up in section list
-    if bonsai_config._has_section("DEFAULT"):
+    if profile == "DEFAULT":
+        click.echo("  DEFAULT" + " (active)")
+    else:
         click.echo("  DEFAULT")
+
     # Grab Profiles from bonsai config and list each one
     sections = bonsai_config._section_list()
     for section in sections:
-        if section == bonsai_config.profile:
+        if section == profile:
             click.echo("  " + section + " (active)")
         else:
             click.echo("  " + section)
@@ -257,20 +289,35 @@ def _list_profiles(bonsai_config):
 
 def _print_profile_information(bonsai_config):
     """ Print current active profile information """
-    items = {}
     try:
-        items = bonsai_config._section_items(bonsai_config.profile)
-    except Exception as e:
-        pass
+        profile_info = bonsai_config._section_items(bonsai_config.profile)
+    except NoSectionError as e:
+        profile_info = bonsai_config._defaults().items()
+
     click.echo("\nProfile Information")
     click.echo("--------------------")
-    for key, val in items:
-        click.echo(key + ": " + val)
+    for key, val in profile_info:
+        click.echo(key + ": " + str(val))
+
+
+def _set_color(ctx, param, value):
+    """ Set use_color flag in bonsai config """
+    if value is None or ctx.resilient_parsing:
+        return
+
+    config = Config()
+    if value:
+        config.use_color = value
+        config._update(use_color=value)
+    else:
+        config.use_color = False
+        config._update(use_color=False)
+    ctx.exit()
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click.option('--debug/--no-debug', default=False,
-              help='Enable/disable verbose debugging output.')
+@click.option('--debug', is_flag=True, default=False,
+              help='Enable verbose debugging output.')
 @click.option('--version', is_flag=True, callback=_check_version,
               help='Show the version and check if Bonsai is up to date.',
               expose_value=False, is_eager=True)
@@ -279,11 +326,14 @@ def _print_profile_information(bonsai_config):
               expose_value=False, is_eager=True)
 @click.option('--timeout', type=int,
               help='Set timeout for CLI API requests.')
+@click.option('--enable-color/--disable-color', callback=_set_color,
+              help='Enable/disable color printing.',
+              expose_value=False, is_eager=True, default=None)
 def cli(debug, timeout):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
     """
-    log_level = logging.DEBUG if debug else logging.ERROR
-    logging.basicConfig(level=log_level)
+    if debug:
+        log.set_enable_all(True)
 
     if timeout:
         BonsaiAPI.TIMEOUT = timeout
@@ -334,10 +384,12 @@ def configure(username, access_key, show):
         content = api.validate()
     except BrainServerError as e:
         _raise_as_click_exception(e)
-    bonsai_config._update(accesskey=access_key, username=username,
-                          url=bonsai_config.url)
+    bonsai_config._update(accesskey=access_key,
+                          username=username,
+                          url=bonsai_config.url,
+                          use_color=bonsai_config.use_color)
 
-    click.echo("Success! Your username is {}".format(username))
+    click.echo("Success!")
 
     if show:
         _print_profile_information(bonsai_config)
@@ -371,10 +423,10 @@ def switch(ctx, profile, url, show, help_option):
     # the --url option must be provided
     section_exists = bonsai_config._has_section(profile)
     if not section_exists and not url:
-        error = 'Profile not found.\n'
-        error_msg = 'Please provide a url with the --url ' \
-                    'option for new profiles'
-        click.echo(error + error_msg)
+        error_msg = ('Profile not found.\n'
+                     'Please provide a url with the --url '
+                     'option for new profiles')
+        click.echo(error_msg)
         ctx.exit(1)
 
     bonsai_config._update(profile=profile)
@@ -435,15 +487,6 @@ def brain_list(json):
             click.echo('The current user has not created any brains.')
 
 
-# This command is currently disabled,
-# brain_create_local is used instead.
-@click.command("create")
-@click.argument("brain_name")
-def brain_create(brain_name):
-    """ Creates a BRAIN on the server."""
-    brain_create_server(brain_name)
-
-
 def brain_create_server(brain_name, project_file=None,
                         project_type=None, json=None):
     try:
@@ -455,6 +498,8 @@ def brain_create_server(brain_name, project_file=None,
     names = [b['name'] for b in brains]
     if brain_name in names:
         click.echo("Brain {} exists.".format(brain_name))
+        click.echo("Run \'bonsai push\' to push new inkling"
+                   " and training source into {}".format(brain_name))
     else:
         try:
             if project_type:
@@ -472,8 +517,6 @@ def brain_create_server(brain_name, project_file=None,
 
         if json:
             click.echo(dumps(response, indent=4, sort_keys=True))
-        else:
-            click.echo("Creating {}, created.".format(brain_name))
 
 
 def _is_empty_dir(dir):
@@ -550,18 +593,16 @@ def brain_create_local(ctx, brain_name, project, project_type, json):
             err_msg = _brain_create_err_msg(project)
             _raise_as_click_exception(err_msg, e)
 
-        _validate_project_file(bproj)
+        try:
+            _validate_project_file(bproj)
+        except FileTooLargeError as e:
+            _raise_as_click_exception("Bonsai Create Failed.\n " + e.message)
 
         brain_create_server(brain_name, project_file=bproj, json=json)
 
-    _add_or_default_brain(bproj.directory(), brain_name, json=json)
+    _add_or_default_brain(bproj.directory(), brain_name)
     ProjectDefault.apply(bproj)
     bproj.save()
-
-    if not json:
-        click.echo("Saving project file, saved.")
-        click.echo("\nRun 'bonsai push' to push inkling and "
-                   "training sources into {}.".format(brain_name))
 
 
 @click.command("delete",
@@ -571,6 +612,8 @@ def brain_delete(brain_name):
     """
     Deletes a BRAIN. A deleted BRAIN cannot be recovered.
     The name of a deleted BRAIN cannot be reused.
+    This operation has no effect on your local file system.
+    Deletion may cause discontinuity between .brains and the Bonsai platform.
     """
     try:
         brain_list = _api().list_brains()
@@ -580,21 +623,14 @@ def brain_delete(brain_name):
 
     names = [b['name'] for b in brains]
     if brain_name not in names:
-        click.echo("Brain {} does not exist. "
+        _raise_as_click_exception(
+                   "Brain {} does not exist. "
                    "No action was taken.".format(brain_name))
     else:
-        click.echo("WARNING: This operation has no effect on your "
-                   "local file system.\n"
-                   "WARNING: Deletion may cause discontinuity "
-                   "between .brains and the Bonsai platform.")
-        click.echo("Deleting {}, ".format(brain_name), nl=False)
         try:
             _api().delete_brain(brain_name)
         except BrainServerError as e:
             _raise_as_click_exception(e)
-        else:
-            click.echo("deleted.")
-            click.echo("The name '{}' cannot be reused.".format(brain_name))
 
 
 @click.command("push")
@@ -612,7 +648,7 @@ def brain_push(brain, project, json):
 
     # Load project file.
     path = ProjectFile.find(directory)
-    logging.debug("Reading project file (%s)", path)
+    log.debug("Reading project file {}".format(path))
     if not path:
         message = ("Unable to locate project file (.bproj) in "
                    "directory={}".format(directory))
@@ -625,13 +661,17 @@ def brain_push(brain, project, json):
             path)
         _raise_as_click_exception(msg, e)
 
-    _validate_project_file(bproj)
+    try:
+        _validate_project_file(bproj)
+    except FileTooLargeError as e:
+        msg = "Bonsai Push Failed.\n " + e.message
+        _raise_as_click_exception(msg)
 
     if not json:
         # Do not print output if json option is used
         files = list(bproj._list_paths()) + [bproj.project_path]
         click.echo("Uploading {} file(s) to {}... ".format(len(files), brain))
-        logging.debug("Uploading files=%s", files)
+        log.debug("Uploading files={}".format(files))
 
     try:
         status = _api().get_brain_status(brain)
@@ -741,6 +781,7 @@ def _user_select(files):
         # Copy the user selected files to a new dict
         if user_input in yes:
             user_selected_files[filename] = files[filename]
+    log.debug('Selected files {}: '.format(user_selected_files))
     return user_selected_files
 
 
@@ -843,17 +884,31 @@ def brain_train_start(brain, project, sim_local, json):
     """Trains the specified BRAIN."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
+
     try:
+        log.debug('Getting status for BRAIN: {}'.format(brain))
+        status = _api().get_brain_status(brain)
+    except BrainServerError as e:
+        _raise_as_click_exception(e)
+    if status['state'] == 'Error':
+        _raise_as_click_exception(
+            "Unable to start training because the brain "
+            "is in an Error state. Please contact Bonsai Support. "
+            "Visit http://bons.ai/contact-us for more "
+            "information on how to contact us.")
+
+    try:
+        log.debug('Starting training for BRAIN: {}'.format(brain))
         content = _api().start_training_brain(brain, sim_local)
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
     if json:
+        log.debug('Outputting JSON')
         click.echo(dumps(content, indent=4, sort_keys=True))
     else:
         try:
-            click.echo("Start training {}...".format(brain))
-            click.echo(
+            log.debug(
                 "When training completes, connect simulators to {}{} "
                 "for predictions".format(
                     Config()._websocket_url(),
@@ -874,11 +929,13 @@ def brain_train_status(brain, json, project):
     brain = _brain_fallback(brain, project)
     status = None
     try:
+        log.debug('Getting status for BRAIN: {}'.format(brain))
         status = _api().get_brain_status(brain)
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
     if json:
+        log.debug('Outputting JSON')
         click.echo(dumps(status, indent=4, sort_keys=True))
     else:
         click.echo("Status for {}:".format(brain))
@@ -903,15 +960,15 @@ def brain_train_stop(brain, project, json):
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     try:
+        log.debug('Stopping training for BRAIN: {}'.format(brain))
         content = _api().stop_training_brain(brain)
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
+    log.debug('Stopped training')
     if json:
+        log.debug('Outputting JSON')
         click.echo(dumps(content, indent=4, sort_keys=True))
-    else:
-        click.echo("Stop training {}...".format(brain))
-        click.echo("Stopped.")
 
 
 @click.command("resume")
@@ -928,16 +985,17 @@ def brain_train_resume(brain, project, sim_local, json):
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
     try:
+        log.debug('Resuming training for BRAIN: {}'.format(brain))
         content = _api().resume_training_brain(brain, 'latest', sim_local)
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
     if json:
+        log.debug('Outputting JSON')
         click.echo(dumps(content, indent=4, sort_keys=True))
     else:
         try:
-            click.echo("Resuming training {}...".format(brain))
-            click.echo(
+            log.debug(
                 "When training completes, connect simulators to {}{} "
                 "for predictions".format(
                     Config()._websocket_url(),
@@ -963,10 +1021,6 @@ cli.add_command(brain_pull)
 cli.add_command(brain_list)
 cli.add_command(brain_download)
 cli.add_command(brain_train)
-
-# The brain sub commands: create
-# This is disabled in favor of brain_create_local.
-brain.add_command(brain_create)
 
 # This sims command has one sub command: list
 sims.add_command(sims_list)

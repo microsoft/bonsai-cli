@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.26
+## Added
+- Added top level `--enable-color/--disable-color` option to enable/disable color printing in the cli
+- Added more logs to the cli
+
+### Changed
+- Remove redundant message on `bonsai configure`
+- Fixed cli behavior with `DEFAULT` profile
+- `bonsai push` and `bonsai create` prevent users from pushing files with a size greater than 640KB
+- `bonsai create` prints error message if BRAIN is in 'ERROR' state
+- Remove console prints on successful `bonsai train start/stop/resume` attempts
+- Remove console prints on successful `bonsai create/delete`
+- Updated cli logging to use bonsai-ai logger
+- CLI errors will be printed in red if color is enabled
+
 ## 0.8.25
 - Update bonsai configure for new validate endpoint
 - Make testing logs quieter
