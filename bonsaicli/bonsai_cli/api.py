@@ -15,6 +15,7 @@ import requests
 import requests.exceptions
 from requests.compat import unquote
 from bonsai_cli import __version__
+from bonsai_ai.logger import Logger
 
 from requests.packages.urllib3.fields import RequestField
 from requests.packages.urllib3.filepost import encode_multipart_formdata
@@ -37,7 +38,7 @@ _STOP_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/stop"
 _RESUME_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/{version}/resume"
 
 
-log = logging.getLogger(__name__)
+log = Logger()
 
 
 class BrainServerError(Exception):
@@ -121,15 +122,16 @@ class BonsaiAPI(object):
         :param api_url: The URL to for the BRAIN REST API.
         :param ws_url: The websocket URL for the BRAIN API.
         """
-        log.debug('Bootstrapping the Bonsai API for user: %s', user_name)
+        log.debug(
+            'Bootstrapping the Bonsai API for user: {}'.format(user_name))
         self._access_key = access_key
         self._user_name = user_name
         self._api_url = api_url
         self._ws_url = ws_url
         self._user_info = self._get_user_info()
-        log.debug('API URL = %s', self._api_url)
-        log.debug('WS URL = %s', self._ws_url)
-        log.debug('User Info = %s', self._user_info)
+        log.debug('API URL = {}'.format(self._api_url))
+        log.debug('WS URL = {}'.format(self._ws_url))
+        log.debug('User Info = {}'.format(self._user_info))
 
     @staticmethod
     def _get_user_info():
@@ -153,7 +155,7 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as a
                      dictionary. Defaults to None.
         """
-        log.debug('POST to %s with data %s...', url, str(data))
+        log.debug('POST to {} with data {}...'.format(url, str(data)))
         response = requests.post(url=url,
                                  auth=(self._user_name, self._access_key),
                                  headers={'User-Agent': self._user_info},
@@ -163,7 +165,7 @@ class BonsaiAPI(object):
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
-            log.debug('POST %s results:\n%s', url, response.text)
+            log.debug('POST {} results:\n{}'.format(url, response.text))
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -176,7 +178,7 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as raw data
                      to be used as the body.
         """
-        log.debug('POST raw data to %s ...', url)
+        log.debug('POST raw data to {} ...'.format(url))
         headers_out = {'Authorization': self._access_key,
                        'User-Agent': self._user_info}
         if headers:
@@ -191,7 +193,7 @@ class BonsaiAPI(object):
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
-            log.debug('POST %s results:\n%s', url, response.text)
+            log.debug('POST {} results:\n{}'.format(url, response.text))
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -204,7 +206,7 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as raw data
                      to be used as the body.
         """
-        log.debug('PUT raw data to %s ...', url)
+        log.debug('PUT raw data to {} ...'.format(url))
         headers_out = {'Authorization': self._access_key,
                        'User-Agent': self._user_info}
         if headers:
@@ -219,7 +221,7 @@ class BonsaiAPI(object):
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
-            log.debug('PUT %s results:\n%s', url, response.text)
+            log.debug('PUT {} results:\n{}'.format(url, response.text))
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -232,7 +234,7 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as a
                      dictionary. Defaults to None.
         """
-        log.debug('PUT to %s with data %s...', url, str(data))
+        log.debug('PUT to {} with data {}...'.format(url, str(data)))
         response = requests.put(url=url,
                                 headers={'Authorization': self._access_key,
                                          'User-Agent': self._user_info},
@@ -242,7 +244,7 @@ class BonsaiAPI(object):
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
-            log.debug('PUT %s results:\n%s', url, response.text)
+            log.debug('PUT {} results:\n{}'.format(url, response.text))
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -253,14 +255,14 @@ class BonsaiAPI(object):
         Issues a GET request.
         :param url: The URL being GET from.
         """
-        log.debug('GET from %s...', url)
+        log.debug('GET from {}...'.format(url))
         response = requests.get(url=url,
                                 headers={'Authorization': self._access_key,
                                          'User-Agent': self._user_info},
                                 timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
-            log.debug('GET %s results:\n%s', url, response.text)
+            log.debug('GET {} results:\n{}'.format(url, response.text))
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -272,7 +274,7 @@ class BonsaiAPI(object):
         and returns a dictionary of filename/data from the response.
         :param url: The URL being GET from.
         """
-        log.debug('GET from %s...', url)
+        log.debug('GET from {}...'.format(url))
         headers = {
             'Authorization': self._access_key,
             "Accept": "multipart/mixed",
@@ -284,7 +286,7 @@ class BonsaiAPI(object):
                                 timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
-            log.debug('GET %s results:\n%s', url, response.text)
+            log.debug('GET {} results:\n{}'.format(url, response.text))
 
             # combine response's headers/response so its parsable together
             header_list = ["{}: {}".format(key, response.headers[key])
@@ -317,7 +319,7 @@ class BonsaiAPI(object):
         Issues a DELETE request.
         :param url: The URL to DELETE.
         """
-        log.debug('DELETE %s...', url)
+        log.debug('DELETE {}...'.format(url))
         response = requests.delete(url=url,
                                    headers={'Authorization': self._access_key,
                                             'User-Agent': self._user_info},
@@ -326,7 +328,7 @@ class BonsaiAPI(object):
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
-            log.debug('DELETE %s results:\n%s', url, response.text)
+            log.debug('DELETE {} results:\n{}'.format(url, response.text))
             return _dict(response)
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
@@ -384,9 +386,10 @@ class BonsaiAPI(object):
             )
 
     def get_simulator_logs_stream(self, brain_name, version, sim):
-        log.debug('Getting simulator logs follow for BRAIN %s for %s, '
-                  'version=%s, sim=%s', brain_name, self._user_name, version,
-                  sim)
+        log.debug(
+            'Getting simulator logs follow for BRAIN {}'.format(brain_name))
+        log.debug('BRAIN version: {}'.format(version))
+        log.debug('Simulator: {}'.format(sim))
         # NOTE: We do not use urljoin for this function as it is broken
         #       for websocket urls in python 3.5.x
         url = _SIM_LOGS_STREAM_URL_TEMPLATE.format(
@@ -441,7 +444,7 @@ class BonsaiAPI(object):
         >>>
         :return: Dictionary of BRAINs.
         """
-        log.debug('Getting list of brains for %s...', self._user_name)
+        log.debug('Getting list of brains for {}...'.format(self._user_name))
         url_path = _LIST_BRAINS_URL_PATH_TEMPLATE.format(
             username=self._user_name
         )
@@ -507,8 +510,7 @@ class BonsaiAPI(object):
         >>> bonsai_api.create_brain('cartpole')
         :param brain_name: The name of the BRAIN
         """
-        log.debug('Creating a brain named %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Creating a BRAIN named {}'.format(brain_name))
         url_path = _CREATE_BRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name
         )
@@ -529,8 +531,7 @@ class BonsaiAPI(object):
         >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
         >>> bonsai_api.delete_brain('cartpole')
         """
-        log.debug('Deleting a brain named %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Deleting a brain named {}'.format(brain_name))
         url_path = _DELETE_BRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
@@ -547,8 +548,7 @@ class BonsaiAPI(object):
         :param brain_name: The name of the BRAIN
         :param project_file: ProjectFile object
         """
-        log.debug('Editing a brain named %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Editing a brain named {}'.format(brain_name))
         url_path = _EDIT_BRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
@@ -593,8 +593,7 @@ class BonsaiAPI(object):
         :param brain_name: The name of the BRAIN to get the simulators for.
         :return: Dictionary of simulators and their statuses.
         """
-        log.debug('Getting simulators for BRAIN %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Getting simulators for BRAIN: {}'.format(brain_name))
         url_path = _SIMS_INFO_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
@@ -614,8 +613,9 @@ class BonsaiAPI(object):
         :param sim: simulator identifier (currently defaults to 1)
         :return: List of log lines.
         """
-        log.debug('Getting simulator logs for BRAIN %s for %s, version=%s, '
-                  'sim=%s', brain_name, self._user_name, version, sim)
+        log.debug('Getting simulator logs for BRAIN {}'.format(brain_name))
+        log.debug('BRAIN version: {}'.format(version))
+        log.debug('Simualtor: {}'.format(sim))
         url_path = _SIMS_LOGS_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name,
@@ -634,8 +634,7 @@ class BonsaiAPI(object):
         >>> bonsai_api.start_training_brain('cartpole')
         :param brain_name: The name of the BRAIN to start training.
         """
-        log.debug('Starting training for BRAIN %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Starting training for BRAIN {}'.format(brain_name))
         data = {} if sim_local else {'manage_simulator': True}
         url_path = _TRAIN_URL_PATH_TEMPLATE.format(
             username=self._user_name,
@@ -660,8 +659,7 @@ class BonsaiAPI(object):
         :param brain_name: The name of the BRAIN to obtain the status for.
         :return: Dictionary containing the BRAIN status.
         """
-        log.debug('Get the status of BRAIN %s for %s.',
-                  brain_name, self._user_name)
+        log.debug('Get the status of BRAIN: {}'.format(brain_name))
         url_path = _STATUS_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
@@ -677,8 +675,7 @@ class BonsaiAPI(object):
         >>> bonsai_api.stop_training_brain('cartpole')
         :param brain_name: The name of the BRAIN to stop training.
         """
-        log.debug('Stopping training for BRAIN %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Stopping training for BRAIN: {}'.format(brain_name))
         url_path = _STOP_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
@@ -691,8 +688,7 @@ class BonsaiAPI(object):
         Resume training a BRAIN.
         TODO:UPDATE DOCSTRING
         """
-        log.debug('Resume training for BRAIN %s for %s',
-                  brain_name, self._user_name)
+        log.debug('Resume training for BRAIN: {}'.format(brain_name))
         data = {} if sim_local else {'manage_simulator': True}
         url_path = _RESUME_URL_PATH_TEMPLATE.format(
             username=self._user_name,
@@ -721,7 +717,7 @@ class LogStreamHandler(object):
         log.debug("Starting websocket connection for bonsai log --follow...")
 
         proxy = self._get_proxy()
-        log.debug('proxy: %s', proxy)
+        log.debug('proxy: {}'.format(proxy))
 
         try:
             ws.run_forever(**proxy)

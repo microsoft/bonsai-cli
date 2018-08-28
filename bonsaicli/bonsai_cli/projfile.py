@@ -12,6 +12,15 @@ class ProjectFileInvalidError(Exception):
     pass
 
 
+class FileTooLargeError(Exception):
+    def __init__(self, file):
+        self.message = (
+            "The file {} exceeds our size"
+            " limit. The system does not accept files with a size"
+            " greater than 640KB. Please remove the file from the"
+            " project file and try again.".format(file))
+
+
 class ProjectDefault():
     """ Default values for a project file """
     @staticmethod
@@ -186,4 +195,14 @@ class ProjectFile():
                         filename, self.project_path)
                     raise ProjectFileInvalidError(msg)
 
+                self._check_size_of_files(glob.glob(path))
         return True
+
+    def _check_size_of_files(self, files):
+        """ Checks size of files and raises
+            an error if they exceed the limit """
+        for file in files:
+            size = os.path.getsize(file)
+            # Throw error if bigger than 640KB
+            if size > 655360:
+                raise FileTooLargeError(file)

@@ -958,7 +958,7 @@ class TestBonsaiApi(TestCase):
         result = self.tempapi.get_simulator_logs_stream('fakebrain', 'v2',
                                                         'cartpole')
         self.assertTrue(mock_logger.debug.called)
-        self.assertEqual(4, mock_logger.debug.call_count)
+        self.assertEqual(6, mock_logger.debug.call_count)
 
     @patch('bonsai_cli.api.log')
     @patch('bonsai_cli.api.websocket')
@@ -966,5 +966,5 @@ class TestBonsaiApi(TestCase):
         """ Test that KeyBoardInterrupt still logs """
         mock_websocket.run_forever.side_effect = KeyboardInterrupt()
         self.tempapi.get_simulator_logs_stream('fakebrain', 'v2', 'cartpole')
-        self.assertEqual(3, mock_logger.debug.call_count)
+        self.assertEqual(5, mock_logger.debug.call_count)
         self.assertTrue(mock_logger.debug.called)
