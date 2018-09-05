@@ -244,7 +244,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue("does not exist. No action" in result.output)
 
     def test_brain_create(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         with temp_filesystem(self):
             self._add_config()
 
@@ -258,7 +258,7 @@ class TestMockedBrainCommand(TestCase):
             open('test.ink', 'a').close()
             open('test_simulator.py', 'a').close()
             brain_set = {'brains': [{'name': 'mybrain'}]}
-            self.api.list_brains = Mock(return_value=brain_set)
+            self.api.get_brain_exists = Mock(return_value=True)
             result = self.runner.invoke(
                 cli, ['create', 'mybrain'])
 
@@ -272,7 +272,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
             # Create only remote brain
-            self.api.list_brains = Mock(return_value={'brains': []})
+            self.api.get_brain_exists = Mock(return_value={'brains': []})
             db = DotBrains()
             db.add('mybrain2')
             result = self.runner.invoke(
@@ -281,7 +281,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
     def test_brain_create_default_brain(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         with temp_filesystem(self):
             with open('.brains', 'w') as fd:
                 dotbrains_dict = {
@@ -295,7 +295,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
     def test_brain_create_json_option(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         self.api.create_brain = Mock(return_value="{'brains': 'brains'}")
         with temp_filesystem(self):
             self._add_config()
@@ -324,7 +324,7 @@ class TestMockedBrainCommand(TestCase):
                                              "test2.txt": b'test content 2'})
             self.assertTrue("name" in payload)
             return {}
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         self.api.create_brain = Mock(side_effect=_side_effect_create_brain)
 
         with temp_filesystem(self):
@@ -392,7 +392,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('exceeds our size limit' in result.output)
 
     def test_brain_create_with_project_type(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         self.api.get_brain_files.return_value = {
             'test.txt': b'# test file 1',
             'test2.txt': b'# test file 2'
@@ -429,7 +429,7 @@ class TestMockedBrainCommand(TestCase):
             else:
                 return {}
 
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         self.api.create_brain = Mock(return_value={},
                                      side_effect=_side_effect_create_brain)
 
@@ -447,7 +447,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
 
     def test_brain_create_with_project_type_nonempty_directory(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
 
         with temp_filesystem(self):
             self._add_config()
@@ -496,15 +496,12 @@ class TestMockedBrainCommand(TestCase):
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure(self, validate_mock):
         with temp_filesystem(self):
-            # add a profile to .bonsai
-            self.runner.invoke(cli, ['switch', '--url', 'FOO', 'FIZZ'])
-
             # Run `bonsai configure`
             result = self.runner.invoke(
                 cli, ['configure'], input=USERNAME + '\n' + ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
-                'FOO/accounts/settings/key' in result.output)
+                'https://beta.bons.ai/accounts/settings/key' in result.output)
 
             # Check ~/.bonsai
             path = os.path.expanduser('~/.bonsai')
@@ -513,7 +510,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = FOO" in lines)
+                self.assertTrue("url = https://api.bons.ai" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
 
     @patch.object(BonsaiAPI, 'validate', return_value={})
@@ -1076,7 +1073,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('ERROR: Bonsai Command Failed' in result.output)
 
     def test_project_option_brain_create(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         with temp_filesystem(self):
             self._add_config()
             os.mkdir('subfolder')
@@ -1334,7 +1331,7 @@ class TestMockedBrainCommand(TestCase):
             loads(result.output)
 
     def test_brain_create_sets_default(self):
-        self.api.list_brains = Mock(return_value={'brains': []})
+        self.api.get_brain_exists = Mock(return_value=False)
         with temp_filesystem(self):
             self._add_config()
 

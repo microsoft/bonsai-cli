@@ -968,3 +968,31 @@ class TestBonsaiApi(TestCase):
         self.tempapi.get_simulator_logs_stream('fakebrain', 'v2', 'cartpole')
         self.assertEqual(5, mock_logger.debug.call_count)
         self.assertTrue(mock_logger.debug.called)
+
+    @patch('bonsai_cli.api.requests.get')
+    def testGetBrainExists(self, mock_get):
+        """
+        Testing api.get_brain_exists()
+        """
+        # api._get_info(..) returns 200 meaning brain details found
+        response = requests.Response()
+        response.status_code = 200
+        mock_get.return_value = response
+        result = self.tempapi.get_brain_exists('fakebrain')
+        self.assertTrue(result)
+        self.assertEqual(1, mock_get.call_count)
+
+        # api._get_info(..) returns 404 meaning no brain found
+        response = requests.Response()
+        response.status_code = 404
+        mock_get.return_value = response
+        result = self.tempapi.get_brain_exists('fakebrain')
+        self.assertFalse(result)
+        self.assertEqual(2, mock_get.call_count)
+
+        # api._get_info(..) returns 500
+        response = requests.Response()
+        response.status_code = 500
+        mock_get.return_value = response
+        with self.assertRaises(BrainServerError):
+            self.tempapi.get_brain_exists('fakebrain')

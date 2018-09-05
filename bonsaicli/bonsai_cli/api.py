@@ -572,6 +572,42 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
         return self._get_multipart(url=url)
 
+    def _get_info(self, brain_name):
+        url_path = _GET_INFO_URL_PATH_TEMPLATE.format(
+            username=self._user_name,
+            brain=brain_name
+        )
+        url = urljoin(self._api_url, url_path)
+
+        log.debug('GET from {}...'.format(url))
+        response = requests.get(url=url,
+                                headers={'Authorization': self._access_key,
+                                         'User-Agent': self._user_info},
+                                timeout=self.TIMEOUT)
+        return response
+
+    def get_brain_exists(self, brain_name):
+        """
+        Issues a command to the BRAIN backend to get brain details for a
+        given brain name.
+          On success status code, returns True.
+          On 404 status code returns False
+          If the request fails, an exception is raised.
+        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
+        >>> bonsai_api.get_brain_exists('cartpole')
+        :param brain_name: The name of the BRAIN
+        """
+        response = self._get_info(brain_name)
+        log.debug('status code: {}'.format(response.status_code))
+        if response.status_code == 404:
+            return False
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            _handle_and_raise(response, e)
+
+        return True
+
     def list_simulators(self, brain_name):
         """
         Lists the simulators registered with this BRAIN. If the request fails,

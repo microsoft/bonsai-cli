@@ -489,14 +489,13 @@ def brain_list(json):
 
 def brain_create_server(brain_name, project_file=None,
                         project_type=None, json=None):
+    brain_exists = None
     try:
-        brain_list = _api().list_brains()
-        brains = brain_list['brains']
+        brain_exists = _api().get_brain_exists(brain_name)
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
-    names = [b['name'] for b in brains]
-    if brain_name in names:
+    if brain_exists:
         click.echo("Brain {} exists.".format(brain_name))
         click.echo("Run \'bonsai push\' to push new inkling"
                    " and training source into {}".format(brain_name))

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.27
+### Changed
+- Update `bonsai create` so that check for existing brain name uses brain
+  details api instead of list brains api
+- Removed calls to `os.path.samefile` in projfile because it was not supported in a windows/python2.7 environment. Added a helper function `_samefile` to emulate `os.path.samefile`
+
 ## 0.8.26
 ## Added
 - Added top level `--enable-color/--disable-color` option to enable/disable color printing in the cli

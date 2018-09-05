@@ -133,9 +133,16 @@ class ProjectFile():
         path = os.path.join(dirname, filename)
 
         # Don't include project_file itself.
-        if (os.path.exists(self.project_path) and
-                os.path.samefile(path, self.project_path)):
-            return True
+        try:
+            if (os.path.exists(self.project_path) and
+                    os.path.samefile(path, self.project_path)):
+                return True
+        except AttributeError:
+            """ Windows/Python2.7 throws an attribute error because
+                os.path.samefile does not exist in that environment"""
+            if (os.path.exists(self.project_path) and
+                    self._samefile(path, self.project_path)):
+                return True
 
         # .git/index, etc.
         dirs_in_path = dirname.split('/')
@@ -151,6 +158,12 @@ class ProjectFile():
             return True
 
         return False
+
+    def _samefile(self, path1, path2):
+        """ os.path.samefile does not exist on windows for python2.7
+            so we attempt to emulate it with this function """
+        return os.path.normcase(os.path.normpath(path1)) == \
+            os.path.normcase(os.path.normpath(path2))
 
     @property
     def inkling_file(self):
