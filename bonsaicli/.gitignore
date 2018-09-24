@@ -109,10 +109,7 @@ deployment-tokens.json
 # Python artefacts
 *.whl
 
-# ppc64 intermediate artefacts
-*/docker_images/ppc64/tensorflow/Dockerfile.*
 consul-static
-common-requirements-ppc64.txt
 .terraform/
 terraform.tfstate
 terraform.tfvars

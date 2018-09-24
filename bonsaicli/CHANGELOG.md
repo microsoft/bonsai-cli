@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.28
+- Removed PPC64 references.
+
 ## 0.8.27
 ### Changed
 - Update `bonsai create` so that check for existing brain name uses brain
