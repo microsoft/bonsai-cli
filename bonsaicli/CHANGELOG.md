@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.29
+### Changed
+- Improved loading of proxy settings.
+- Updated sims list output to reflect the changes to the API
+- `bonsai switch` and `bonsai switch --show` print configuration file location
+
 ## 0.8.28
 - Removed PPC64 references.
 

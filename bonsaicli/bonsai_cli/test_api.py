@@ -24,7 +24,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/')
         self.timeout = self.tempapi.TIMEOUT
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testValidate(self, mock_post):
         """
         Test post through external validate function
@@ -53,7 +53,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testValidateUrlJoining(self, mock_post):
         """
         Test that url's are joined correctly for validate
@@ -86,7 +86,7 @@ class TestBonsaiApi(TestCase):
             url='https://someurl/v1/validate'
         )
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testValidateRaiseError(self, mock_post):
         """
         Test that post raises an HTTP error through the validate function
@@ -115,7 +115,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testCreateBrain(self, mock_post):
 
         # Construct mock response object and relevant function behavior
@@ -139,7 +139,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testCreateBrainUrlJoining(self, mock_post):
         """
         Test that url's are joined correctly for create
@@ -172,7 +172,7 @@ class TestBonsaiApi(TestCase):
             url='https://someurl/v1/fakeuser/brains'
         )
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testCreateBrainWithProjectType(self, mock_post):
 
         # Construct mock response object and relevant function behavior
@@ -197,7 +197,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testCreateBrainWithProject(self, mock_post):
         """
         Test create brain with project api
@@ -217,7 +217,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.post')
+    @patch('bonsai_cli.api.requests.Session.post')
     def testPostRawDataError(self, mock_post):
         """
         Test that an HTTPError is handled when posting raw data
@@ -238,7 +238,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_post.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testListBrains(self, mock_get):
         """
         Test getting list of brains from api
@@ -269,7 +269,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testListBrainsUrlJoining(self, mock_get):
         """
         Test that url's are joined correctly for list
@@ -298,7 +298,7 @@ class TestBonsaiApi(TestCase):
             timeout=self.timeout
         )
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testListBrainsRaiseError(self, mock_get):
         """
         Test that a get request will raise an HTTPError
@@ -324,7 +324,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_get.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testReturnEmptyJson(self, mock_get):
         """
         Testing that API returns empty json when there
@@ -351,7 +351,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(0, mock_response.json.call_count)
         self.assertEqual(response_dict, {})
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetBrainStatus(self, mock_get):
         """
         Test getting brain status
@@ -384,7 +384,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetBrainStatusUrlJoining(self, mock_get):
         """
         Test that url's are joined correctly for get brain status
@@ -413,7 +413,7 @@ class TestBonsaiApi(TestCase):
             timeout=self.timeout
         )
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetSimLogs(self, mock_get):
         """
         Test getting sim logs
@@ -442,7 +442,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_list, expected_list)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetSimsLogsUrlJoining(self, mock_get):
         """
         Test that url's are joined correctly for get sim logs
@@ -471,7 +471,7 @@ class TestBonsaiApi(TestCase):
             timeout=self.timeout
         )
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testListSims(self, mock_get):
         """
         Test getting list of sims from api
@@ -508,7 +508,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testListSimsUrlJoining(self, mock_get):
         """
         Test that url's are joined correctly for list sims
@@ -537,7 +537,7 @@ class TestBonsaiApi(TestCase):
             timeout=self.timeout
         )
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetBrainFiles(self, mock_get):
         """
         Test getting brain files
@@ -567,7 +567,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(0, mock_response.json.call_count)
         self.assertEqual(response_dict, {})
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetBrainFilesUrlJoining(self, mock_get):
         """
         Test that url's are joined correctly for getting brain files
@@ -602,7 +602,7 @@ class TestBonsaiApi(TestCase):
             timeout=self.timeout
         )
 
-    @patch('bonsai_cli.api.requests.delete')
+    @patch('bonsai_cli.api.requests.Session.delete')
     def testDeleteBrain(self, mock_delete):
         """
         Test Delete Brain from api
@@ -635,7 +635,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_response.json.call_count)
         self.assertEqual(response_dict, expected_dict)
 
-    @patch('bonsai_cli.api.requests.delete')
+    @patch('bonsai_cli.api.requests.Session.delete')
     def testDeleteBrainUrlJoining(self, mock_delete):
         """
         Test that url's are joined correctly for list sims
@@ -666,7 +666,7 @@ class TestBonsaiApi(TestCase):
             timeout=self.timeout
         )
 
-    @patch('bonsai_cli.api.requests.delete')
+    @patch('bonsai_cli.api.requests.Session.delete')
     def testDeleteBrainRaiseError(self, mock_delete):
         """
         Test that delete raises an error
@@ -694,7 +694,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_delete.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testStartTrainingBrain(self, mock_put):
         """
         Test Brain start training
@@ -721,7 +721,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testStartTrainingBrainUrlJoining(self, mock_put):
         """
         Test that url's are joined correctly for starting training
@@ -754,7 +754,7 @@ class TestBonsaiApi(TestCase):
             url='https://someurl/v1/fakeuser/fakebrain/train'
         )
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testStopTrainingBrain(self, mock_put):
         """
         Test Brain stop training
@@ -781,7 +781,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testStopTrainingBrainUrlJoining(self, mock_put):
         """
         Test that url's are joined correctly for stopping training
@@ -814,7 +814,7 @@ class TestBonsaiApi(TestCase):
             url='https://someurl/v1/fakeuser/fakebrain/stop'
         )
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testStopTrainingBrainRaiseError(self, mock_put):
         """
         Test that an error is raised after the put request
@@ -843,7 +843,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.raise_for_status.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testEditBrain(self, mock_put):
         """
         Testing API functionality for edit brain function
@@ -862,7 +862,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testEditBrainUrlJoining(self, mock_put):
         """
         Test that url's are joined correctly for editing brain
@@ -887,7 +887,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual('https://someurl/v1/fakeuser/fakebrain',
                          kwargs.get('url'))
 
-    @patch('requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testPutRawDataHTTPError(self, mock_put):
         """
         Testing API handles exception when sending a put request
@@ -908,7 +908,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(1, mock_put.call_count)
         self.assertEqual(1, mock_response.json.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testConnectionError(self, mock_put):
         """
         Testing that connection errors are handled
@@ -931,7 +931,7 @@ class TestBonsaiApi(TestCase):
         # self.assertEqual(1, mock_put.call_count)
         # self.assertEqual(1, mock_response.raise_for_status.call_count)
 
-    @patch('bonsai_cli.api.requests.put')
+    @patch('bonsai_cli.api.requests.Session.put')
     def testRedirectError(self, mock_put):
         """
         Testing that redirect errors are handled
@@ -969,7 +969,7 @@ class TestBonsaiApi(TestCase):
         self.assertEqual(5, mock_logger.debug.call_count)
         self.assertTrue(mock_logger.debug.called)
 
-    @patch('bonsai_cli.api.requests.get')
+    @patch('bonsai_cli.api.requests.Session.get')
     def testGetBrainExists(self, mock_get):
         """
         Testing api.get_brain_exists()

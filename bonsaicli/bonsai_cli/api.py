@@ -1,13 +1,14 @@
 import functools
 import json
-import logging
 import os
 import sys
 
 try:
     from urllib.parse import urljoin
+    from urllib.request import getproxies
 except ImportError:
     from urlparse import urljoin
+    from urllib import getproxies
 
 import click
 import email
@@ -129,6 +130,8 @@ class BonsaiAPI(object):
         self._api_url = api_url
         self._ws_url = ws_url
         self._user_info = self._get_user_info()
+        self._session = requests.Session()
+        self._session.proxies = getproxies()
         log.debug('API URL = {}'.format(self._api_url))
         log.debug('WS URL = {}'.format(self._ws_url))
         log.debug('User Info = {}'.format(self._user_info))
@@ -156,12 +159,12 @@ class BonsaiAPI(object):
                      dictionary. Defaults to None.
         """
         log.debug('POST to {} with data {}...'.format(url, str(data)))
-        response = requests.post(url=url,
-                                 auth=(self._user_name, self._access_key),
-                                 headers={'User-Agent': self._user_info},
-                                 json=data,
-                                 allow_redirects=False,
-                                 timeout=self.TIMEOUT)
+        response = self._session.post(url=url,
+                                      auth=(self._user_name, self._access_key),
+                                      headers={'User-Agent': self._user_info},
+                                      json=data,
+                                      allow_redirects=False,
+                                      timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
@@ -184,11 +187,11 @@ class BonsaiAPI(object):
         if headers:
             headers_out.update(headers)
 
-        response = requests.post(url=url,
-                                 headers=headers_out,
-                                 data=data,
-                                 allow_redirects=False,
-                                 timeout=self.TIMEOUT)
+        response = self._session.post(url=url,
+                                      headers=headers_out,
+                                      data=data,
+                                      allow_redirects=False,
+                                      timeout=self.TIMEOUT)
 
         try:
             response.raise_for_status()
@@ -212,11 +215,11 @@ class BonsaiAPI(object):
         if headers:
             headers_out.update(headers)
 
-        response = requests.put(url=url,
-                                headers=headers_out,
-                                data=data,
-                                allow_redirects=False,
-                                timeout=self.TIMEOUT)
+        response = self._session.put(url=url,
+                                     headers=headers_out,
+                                     data=data,
+                                     allow_redirects=False,
+                                     timeout=self.TIMEOUT)
 
         try:
             response.raise_for_status()
@@ -235,12 +238,13 @@ class BonsaiAPI(object):
                      dictionary. Defaults to None.
         """
         log.debug('PUT to {} with data {}...'.format(url, str(data)))
-        response = requests.put(url=url,
-                                headers={'Authorization': self._access_key,
+        response = self._session.put(url=url,
+                                     headers={
+                                         'Authorization': self._access_key,
                                          'User-Agent': self._user_info},
-                                json=data,
-                                allow_redirects=False,
-                                timeout=self.TIMEOUT)
+                                     json=data,
+                                     allow_redirects=False,
+                                     timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
@@ -256,10 +260,11 @@ class BonsaiAPI(object):
         :param url: The URL being GET from.
         """
         log.debug('GET from {}...'.format(url))
-        response = requests.get(url=url,
-                                headers={'Authorization': self._access_key,
+        response = self._session.get(url=url,
+                                     headers={
+                                         'Authorization': self._access_key,
                                          'User-Agent': self._user_info},
-                                timeout=self.TIMEOUT)
+                                     timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             log.debug('GET {} results:\n{}'.format(url, response.text))
@@ -281,9 +286,9 @@ class BonsaiAPI(object):
             'Accept-Encoding': 'base64',
             'User-Agent': self._user_info
         }
-        response = requests.get(url=url,
-                                headers=headers,
-                                timeout=self.TIMEOUT)
+        response = self._session.get(url=url,
+                                     headers=headers,
+                                     timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             log.debug('GET {} results:\n{}'.format(url, response.text))
@@ -320,11 +325,12 @@ class BonsaiAPI(object):
         :param url: The URL to DELETE.
         """
         log.debug('DELETE {}...'.format(url))
-        response = requests.delete(url=url,
-                                   headers={'Authorization': self._access_key,
+        response = self._session.delete(url=url,
+                                        headers={
+                                            'Authorization': self._access_key,
                                             'User-Agent': self._user_info},
-                                   allow_redirects=False,
-                                   timeout=self.TIMEOUT)
+                                        allow_redirects=False,
+                                        timeout=self.TIMEOUT)
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
@@ -580,10 +586,11 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
 
         log.debug('GET from {}...'.format(url))
-        response = requests.get(url=url,
-                                headers={'Authorization': self._access_key,
+        response = self._session.get(url=url,
+                                     headers={
+                                         'Authorization': self._access_key,
                                          'User-Agent': self._user_info},
-                                timeout=self.TIMEOUT)
+                                     timeout=self.TIMEOUT)
         return response
 
     def get_brain_exists(self, brain_name):

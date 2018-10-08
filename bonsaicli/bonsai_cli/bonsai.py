@@ -118,7 +118,7 @@ def _api():
     Convenience function for creating and returning an API object.
     :return: An API object.
     """
-    bonsai_config = Config()
+    bonsai_config = Config(argv=sys.argv[0])
     _verify_required_configuration(bonsai_config)
     return BonsaiAPI(access_key=bonsai_config.accesskey,
                      user_name=bonsai_config.username,
@@ -265,39 +265,54 @@ def _sysinfo(ctx, param, value):
     packages = pip.utils.get_installed_distributions()
     click.echo("\nPackage Information\n-------------------")
     click.echo(pprint.pformat(packages))
+    click.echo("\nBonsai Profile Information\n--------------------------")
     _print_profile_information(Config())
     ctx.exit()
 
 
-def _list_profiles(bonsai_config):
+def _list_profiles(config):
     """ Lists available profiles """
-    profile = bonsai_config.profile
-    click.echo("\nAvailable Profiles:")
-    if profile == "DEFAULT":
-        click.echo("  DEFAULT" + " (active)")
-    else:
-        click.echo("  DEFAULT")
-
-    # Grab Profiles from bonsai config and list each one
-    sections = bonsai_config._section_list()
-    for section in sections:
-        if section == profile:
-            click.echo("  " + section + " (active)")
+    if config.file_paths:
+        profile = config.profile
+        click.echo(
+            "\nBonsai configuration file(s) found at {}".format(
+                config.file_paths))
+        click.echo("\nAvailable Profiles:")
+        if profile == "DEFAULT":
+            click.echo("  DEFAULT" + " (active)")
         else:
-            click.echo("  " + section)
+            click.echo("  DEFAULT")
+
+        # Grab Profiles from bonsai config and list each one
+        sections = config._section_list()
+        for section in sections:
+            if section == profile:
+                click.echo("  " + section + " (active)")
+            else:
+                click.echo("  " + section)
+    else:
+        click.echo("\nCould not locate bonsai configuration file. "
+                   "Please run \'bonsai configure\'.")
 
 
-def _print_profile_information(bonsai_config):
+def _print_profile_information(config):
     """ Print current active profile information """
-    try:
-        profile_info = bonsai_config._section_items(bonsai_config.profile)
-    except NoSectionError as e:
-        profile_info = bonsai_config._defaults().items()
+    if config.file_paths:
+        try:
+            profile_info = config._section_items(config.profile)
+        except NoSectionError as e:
+            profile_info = config._defaults().items()
 
-    click.echo("\nProfile Information")
-    click.echo("--------------------")
-    for key, val in profile_info:
-        click.echo(key + ": " + str(val))
+        click.echo(
+            "\nBonsai configuration file(s) found at {}".format(
+                config.file_paths))
+        click.echo("\nProfile Information")
+        click.echo("--------------------")
+        for key, val in profile_info:
+            click.echo(key + ": " + str(val))
+    else:
+        click.echo("\nCould not locate bonsai configuration file. "
+                   "Please run \'bonsai configure\'.")
 
 
 def _set_color(ctx, param, value):
@@ -408,20 +423,20 @@ def switch(ctx, profile, url, show, help_option):
     Change the active configuration section.\n
     For new profiles you must provide a url with the --url option.
     """
-    bonsai_config = Config(argv=sys.argv[0])
+    config = Config(argv=sys.argv[0])
     # `bonsai switch` and `bonsai switch -h/--help have the same output
     if (not profile and not show) or help_option:
         click.echo(ctx.get_help())
-        _list_profiles(bonsai_config)
+        _list_profiles(config)
         ctx.exit(0)
 
     if not profile and show:
-        _print_profile_information(bonsai_config)
+        _print_profile_information(config)
         ctx.exit(0)
 
     # Let the user know that when switching to a new profile
     # the --url option must be provided
-    section_exists = bonsai_config._has_section(profile)
+    section_exists = config._has_section(profile)
     if not section_exists and not url:
         error_msg = ('Profile not found.\n'
                      'Please provide a url with the --url '
@@ -429,15 +444,15 @@ def switch(ctx, profile, url, show, help_option):
         click.echo(error_msg)
         ctx.exit(1)
 
-    bonsai_config._update(profile=profile)
+    config._update(profile=profile)
     if url:
-        bonsai_config._update(url=url)
+        config._update(url=url)
 
-    url = bonsai_config.url
+    url = config.url
     click.echo("Success! Switched to {}. "
                "Commands will target: {}".format(profile, url))
     if show:
-        _print_profile_information(bonsai_config)
+        _print_profile_information(config)
 
 
 @click.group()
@@ -841,8 +856,10 @@ def brain_train():
               help='Override to target another project directory.')
 @click.option('--json', default=False, is_flag=True,
               help='Output json.')
-def sims_list(brain, project, json):
-    """List the simulators connected to the BRAIN server."""
+@click.option('--verbose', default=False, is_flag=True,
+              help='Verbose output.')
+def sims_list(brain, project, json, verbose):
+    """List the simulators connected to a BRAIN."""
     _check_dbrains(project)
     brain = _brain_fallback(brain, project)
 
@@ -851,17 +868,20 @@ def sims_list(brain, project, json):
     except BrainServerError as e:
         _raise_as_click_exception(e)
 
-    if json:
+    if json or verbose:
         click.echo(dumps(content, indent=4, sort_keys=True))
     else:
         try:
-            click.echo("Simulators for {}:".format(brain))
+            click.echo("Simulators for BRAIN {}:".format(brain))
             rows = []
             for sim_name, sim_details in content.items():
-                rows.append([sim_name, 1, 'connected'])
+                rows.append(
+                    [sim_name,
+                     len(sim_details['active']),
+                     len(sim_details['inactive'])])
 
             table = tabulate(rows,
-                             headers=['NAME', 'INSTANCES', 'STATUS'],
+                             headers=['NAME', '# ACTIVE', '# INACTIVE'],
                              tablefmt='simple')
             click.echo(table)
         except AttributeError as e:

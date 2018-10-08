@@ -1563,12 +1563,24 @@ class TestSysInfo(TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
+    def _add_config(self):
+        ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
+        USERNAME = 'admin'
+        PROFILE = 'test'
+        URL = 'http://testing'
+
+        config = Config()
+        config._update(profile=PROFILE, url=URL,
+                       accesskey=ACCESS_KEY, username=USERNAME)
+
     def test_sysinfo(self):
-        result = self.runner.invoke(cli, ['--sysinfo'])
-        self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-        self.assertIn("Platform", result.output)
-        self.assertIn("Package", result.output)
-        self.assertIn("Profile", result.output)
+        with temp_filesystem(self):
+            self._add_config()
+            result = self.runner.invoke(cli, ['--sysinfo'])
+            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
+            self.assertIn("Platform", result.output)
+            self.assertIn("Package", result.output)
+            self.assertIn("Profile", result.output)
 
     def test_no_dotbonsai(self):
         with temp_filesystem(self):
@@ -1576,4 +1588,5 @@ class TestSysInfo(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
             # assert that there is no profile info to print
-            self.assertEqual("-\n", result.output[-2:])
+            self.assertIn(
+                "Could not locate bonsai configuration", result.output)
