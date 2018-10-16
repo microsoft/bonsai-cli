@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.30
+## Added
+- `bonsai diagnose` runs various tests to check the health of `bonsai-cli`
+-  Added `get_project` to API.
+-  Added `utils.py` file
+### Changed
+- Updated `bonsai train status` to now print config profile and file location(s)
+- Moved various functions into `utils.py`
+
 ## 0.8.29
 ### Changed
 - Improved loading of proxy settings.

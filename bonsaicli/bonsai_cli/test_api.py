@@ -414,64 +414,6 @@ class TestBonsaiApi(TestCase):
         )
 
     @patch('bonsai_cli.api.requests.Session.get')
-    def testGetSimLogs(self, mock_get):
-        """
-        Test getting sim logs
-        """
-
-        # Construct mock response object and relevant function behavior
-        mock_response = Mock()
-        expected_list = ["line1", "line2"]
-        mock_response.json.return_value = expected_list
-
-        # Assign mock response to our patched function
-        mock_get.return_value = mock_response
-
-        # Call API function we are testing
-        response_list = self.tempapi.get_simulator_logs('fakebrain',
-                                                        '1', 'cartpole')
-
-        # Check that our api made expected calls
-        mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
-            url='https://someurl/v1/fakeuser/fakebrain/1/sims/cartpole/logs',
-            timeout=self.timeout
-        )
-        self.assertEqual(1, mock_get.call_count)
-        self.assertEqual(1, mock_response.json.call_count)
-        self.assertEqual(response_list, expected_list)
-
-    @patch('bonsai_cli.api.requests.Session.get')
-    def testGetSimsLogsUrlJoining(self, mock_get):
-        """
-        Test that url's are joined correctly for get sim logs
-        """
-        # Construct mock response object and relevant function behavior
-        mock_response = Mock()
-
-        # Assign mock response to our patched function
-        mock_get.return_value = mock_response
-
-        # Test different urls and show that they are joined correctly
-        self.tempapi._api_url = 'https://someurl//'
-        self.tempapi.get_simulator_logs('fakebrain', '1', 'cartpole')
-        mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
-            url='https://someurl/v1/fakeuser/fakebrain/1/sims/cartpole/logs',
-            timeout=self.timeout
-        )
-        self.tempapi._api_url = 'https://someurl'
-        self.tempapi.get_simulator_logs('fakebrain', '1', 'cartpole')
-        mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
-            url='https://someurl/v1/fakeuser/fakebrain/1/sims/cartpole/logs',
-            timeout=self.timeout
-        )
-
-    @patch('bonsai_cli.api.requests.Session.get')
     def testListSims(self, mock_get):
         """
         Test getting list of sims from api

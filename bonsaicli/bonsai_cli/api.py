@@ -29,14 +29,13 @@ _DELETE_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
 _EDIT_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
 _GET_INFO_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
 _SIMS_INFO_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/sims"
-_SIMS_LOGS_URL_PATH_TEMPLATE = (
-    "/v1/{username}/{brain}/{version}/sims/{sim}/logs")
 _SIM_LOGS_STREAM_URL_TEMPLATE = (
     "{ws_url}/v1/{username}/{brain}/{version}/sims/{sim}/logs/ws")
 _STATUS_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/status"
 _TRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/train"
 _STOP_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/stop"
 _RESUME_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/{version}/resume"
+_GET_PROJECT_URL_PATH_TEMPLATE = "/v1/projects/{category}/{name}"
 
 
 log = Logger()
@@ -593,6 +592,22 @@ class BonsaiAPI(object):
                                      timeout=self.TIMEOUT)
         return response
 
+    def get_project(self, category, name):
+        """
+        Issues a command to the BRAIN backend to get project
+        files for a given project-type.
+        :param category: Category of project
+        :param name: Name of project
+        Example: get_project(demos, cartpole)
+        """
+        url_path = _GET_PROJECT_URL_PATH_TEMPLATE.format(
+            category=category,
+            name=name
+        )
+        url = urljoin(self._api_url, url_path)
+        files = self._get_multipart(url)
+        return files
+
     def get_brain_exists(self, brain_name):
         """
         Issues a command to the BRAIN backend to get brain details for a
@@ -640,30 +655,6 @@ class BonsaiAPI(object):
         url_path = _SIMS_INFO_URL_PATH_TEMPLATE.format(
             username=self._user_name,
             brain=brain_name
-        )
-        url = urljoin(self._api_url, url_path)
-        return self._get(url=url)
-
-    def get_simulator_logs(self, brain_name, version, sim):
-        """
-        Get the logs for simulators registered with this BRAIN version. If the
-        request fails, an exception is raised.
-        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name='bill')
-        >>> bonsai_api.get_simulator_logs('cartpole', 'latest', '1')
-        >>>
-        :param brain_name: The name of the BRAIN to get the simulator logs for
-        :param version: version of the BRAIN to get simulator logs for
-        :param sim: simulator identifier (currently defaults to 1)
-        :return: List of log lines.
-        """
-        log.debug('Getting simulator logs for BRAIN {}'.format(brain_name))
-        log.debug('BRAIN version: {}'.format(version))
-        log.debug('Simualtor: {}'.format(sim))
-        url_path = _SIMS_LOGS_URL_PATH_TEMPLATE.format(
-            username=self._user_name,
-            brain=brain_name,
-            version=version,
-            sim=sim
         )
         url = urljoin(self._api_url, url_path)
         return self._get(url=url)
