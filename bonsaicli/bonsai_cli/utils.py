@@ -14,7 +14,6 @@ from bonsai_cli.projfile import (
     ProjectFile, ProjectFileInvalidError, FileTooLargeError)
 
 
-
 def api():
     """
     Convenience function for creating and returning an API object.
@@ -60,7 +59,7 @@ def click_echo(text, fg=None, bg=None):
      param bg: background color
     """
     try:
-        config = Config()
+        config = Config(argv=sys.argv[0])
         color = config.use_color
     except ValueError:
         color = False
@@ -91,28 +90,29 @@ def check_dbrains(project=None):
         raise_as_click_exception(msg, err)
 
 
-def check_cli_version():
+def check_cli_version(print_up_to_date=True):
     """ Compares local cli version with the one on pypi """
     pypi_url = 'https://pypi.python.org/pypi/bonsai-cli/json'
     pypi_version = get_pypi_version(pypi_url)
     user_cli_version = __version__
 
-    click_echo('Checking if cli is up to date.', fg='yellow')
     if not pypi_version:
-        click_echo('Bonsai-cli: ' + user_cli_version)
+        click_echo('You are using bonsai-cli version ' + user_cli_version,
+                   fg='yellow')
         click_echo(
             'Unable to connect to PyPi and determine if CLI is up to date.',
             fg='red')
     elif user_cli_version != pypi_version:
-        click_echo('Bonsai-cli: ' + user_cli_version)
-        click_echo('Bonsai update available. The most recent version is : ' +
-                   pypi_version, fg='yellow')
+        click_echo('You are using bonsai-cli version ' + user_cli_version,
+                   fg='yellow')
+        click_echo('Bonsai update available. The most recent version is ' +
+                   pypi_version + '.', fg='yellow')
         click_echo(
             'Upgrade via pip using \'pip install --upgrade bonsai-cli\'',
             fg='yellow')
-    else:
-        click_echo('Bonsai-cli: ' + user_cli_version)
-        click_echo('Everything is up to date.', fg='green')
+    elif print_up_to_date:
+        click_echo('You are using bonsai-cli version ' + user_cli_version +
+                   ', Everything is up to date.', fg='green')
 
 
 class CustomClickException(click.ClickException):
@@ -199,7 +199,6 @@ def list_profiles(config):
                    "Please run \'bonsai configure\'.")
 
 
-
 def print_profile_information(config):
     """ Print current active profile information """
     if config.file_paths:
@@ -230,7 +229,7 @@ def raise_as_click_exception(*args):
     one of its subclasses), or a message string followed by an Exception.
     """
     try:
-        config = Config()
+        config = Config(argv=sys.argv[0])
         color = config.use_color
     except ValueError:
         color = False

@@ -108,9 +108,6 @@ class ProjectFile():
             # python assumes the current working directory.
             merged = os.path.join(project_dir, path)
             relative = os.path.relpath(merged, project_dir)
-            if relative.startswith('..'):
-                # Ignore paths which are not under the project
-                continue
 
             # perform glob expansion on each (absolute) path in project
             # iglob returns a (possibly empty) generator of expanded paths

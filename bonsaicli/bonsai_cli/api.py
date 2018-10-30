@@ -480,6 +480,9 @@ class BonsaiAPI(object):
 
         # Prepare application/json payload.
         project_file_name = os.path.basename(project_file.project_path)
+        for i, path in enumerate(rel_paths):
+            if path.startswith('..'):
+                rel_paths[i] = os.path.basename(path)
         json_payload = {
             "name": brain_name,
             "description": "",

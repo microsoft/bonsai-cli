@@ -95,9 +95,13 @@ class TestMockedBrainCommand(TestCase):
         self.api = Mock()
         patcher = patch('bonsai_cli.bonsai.api',
                         new=Mock(return_value=self.api))
+        version_check_patcher = patch('bonsai_cli.bonsai.check_cli_version',
+                                      new=Mock(return_value=True))
 
         self.addCleanup(patcher.stop)
+        self.addCleanup(version_check_patcher.stop)
         patcher.start()
+        version_check_patcher.start()
 
     def _add_config(self):
         ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
@@ -589,7 +593,7 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
-                self.assertTrue("use_color = True" in lines)
+                self.assertTrue("use_color = true" in lines)
 
             # Check that use_color changes to false
             result = self.runner.invoke(cli, ['--disable-color'])
@@ -597,7 +601,7 @@ class TestMockedBrainCommand(TestCase):
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
-                self.assertTrue("use_color = False" in lines)
+                self.assertTrue("use_color = false" in lines)
 
             # Check that use_color keeps the same value when reconfiguring
             result = self.runner.invoke(cli, cli_args)
@@ -605,7 +609,7 @@ class TestMockedBrainCommand(TestCase):
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
-                self.assertTrue("use_color = False" in lines)
+                self.assertTrue("use_color = false" in lines)
 
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_color_options(self, validate_mock):
@@ -629,21 +633,21 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(USERNAME) in lines)
-                self.assertTrue("use_color = True" in lines)
+                self.assertTrue("use_color = true" in lines)
 
             result = self.runner.invoke(cli, ['--disable-color'])
             path = os.path.expanduser('~/.bonsai')
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
-                self.assertTrue("use_color = False" in lines)
+                self.assertTrue("use_color = false" in lines)
 
             result = self.runner.invoke(cli, ['--enable-color'])
             path = os.path.expanduser('~/.bonsai')
             with open(path, 'r') as f:
                 result = f.read()
                 lines = result.split("\n")
-                self.assertTrue("use_color = True" in lines)
+                self.assertTrue("use_color = true" in lines)
 
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure_show_option(self, validate_mock):
@@ -1220,19 +1224,6 @@ class TestMockedBrainCommand(TestCase):
             # Throws error if not valid json
             loads(result.output)
 
-    def test_train_stop_brain_in_error_state(self):
-        """ Tests behavior when trying to train a brain in an error state """
-        self.api.get_brain_status = Mock(return_value={'state': 'Error'})
-
-        with temp_filesystem(self):
-            self._add_config()
-            db = DotBrains()
-            db.add('mybrain')
-
-            result = self.runner.invoke(cli, ['train', 'start'])
-            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
-            self.assertTrue('contact Bonsai Support' in result.output)
-
     def test_train_resume(self):
         """ Tests `bonsai train resume` """
         self.api.resume_training_brain = Mock(return_value={
@@ -1512,16 +1503,19 @@ class TestPyPiVersionRequest(TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
-        self.req_fail_output = 'Bonsai-cli: ' + __version__ + '\n' \
+        self.req_fail_output = 'You are using bonsai-cli version ' + \
+                               __version__ + '\n' + \
                                'Unable to connect to PyPi and ' \
                                'determine if CLI is up to date.\n'
-        self.not_up_to_date_output = 'Bonsai-cli: ' + __version__ +\
+        self.not_up_to_date_output = 'You are using bonsai-cli version ' + \
+                                     __version__ + \
                                      '\nBonsai update available. The most ' \
-                                     'recent version is : 9999\nUpgrade via ' \
+                                     'recent version is 9999.\nUpgrade via ' \
                                      'pip using \'pip install --upgrade ' \
                                      'bonsai-cli\'\n'
-        self.up_to_date_output = 'Bonsai-cli: ' + __version__ + \
-                                 '\nEverything is up to date.\n'
+        self.up_to_date_output = 'You are using bonsai-cli version ' + \
+                                 __version__ + \
+                                 ', Everything is up to date.'
 
     def _add_config(self):
         ACCESS_KEY = '00000000-1111-2222-3333-000000000001'

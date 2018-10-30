@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.31
+### Added
+- Every command will check if bonsai is up to date. It can be disabled using `bonsai --disable-version-check [COMMAND]`
+### Changed
+- Change value written to config for `use_color`
+- `bonsai push` works with relative paths specified in `projectfile`
+- catch subprocess error and print output for `bonsai diagnose`
+- update setup.py requirements
+- Allow brains in error state to start training
+- Fixed bug in `utils.py` where `Config` was taking in cli command-line args
+
 ## 0.8.30
 ## Added
 - `bonsai diagnose` runs various tests to check the health of `bonsai-cli`

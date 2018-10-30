@@ -1,6 +1,7 @@
 """
 This file contaisn unit tests for the bonsai api
 """
+import os
 from unittest import TestCase
 
 # python 3.3+ includes mock in the unittest module
@@ -11,6 +12,7 @@ except ImportError:
 
 import requests
 from requests.exceptions import HTTPError, ConnectionError
+from click.testing import CliRunner
 
 from bonsai_cli.api import BrainServerError, BonsaiAPI
 from bonsai_cli.projfile import ProjectFile
@@ -23,6 +25,7 @@ class TestBonsaiApi(TestCase):
     def setUp(self):
         self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/')
         self.timeout = self.tempapi.TIMEOUT
+        self.runner = CliRunner()
 
     @patch('bonsai_cli.api.requests.Session.post')
     def testValidate(self, mock_post):
@@ -938,3 +941,31 @@ class TestBonsaiApi(TestCase):
         mock_get.return_value = response
         with self.assertRaises(BrainServerError):
             self.tempapi.get_brain_exists('fakebrain')
+
+    def test_payload_create_brain(self):
+        with self.runner.isolated_filesystem():
+            open('test.ink', 'a').close()
+            os.mkdir('sub')
+            os.chdir('sub')
+            open('bridge.py', 'a').close()
+            os.mkdir('sub2')
+            os.chdir('sub2')
+            open('model.py', 'a').close()
+            os.mkdir('sub3')
+            open('sub3/foo.py', 'a').close()
+
+            pf = ProjectFile('test.bproj')
+            pf.files.add('../../test.ink')
+            pf.files.add('../bridge.py')
+            pf.files.add('model.py')
+            pf.files.add('sub3/foo.py')
+
+            payload, filesdata = self.tempapi._payload_create_brain('foo', pf)
+            assert 'test.ink' in filesdata
+            assert 'test.ink' in payload['project_accompanying_files']
+            assert 'model.py' in filesdata
+            assert 'model.py' in payload['project_accompanying_files']
+            assert 'bridge.py' in filesdata
+            assert 'bridge.py' in payload['project_accompanying_files']
+            assert 'sub3/foo.py' in filesdata
+            assert 'sub3/foo.py' in payload['project_accompanying_files']
