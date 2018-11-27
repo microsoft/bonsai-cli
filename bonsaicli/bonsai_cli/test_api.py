@@ -967,5 +967,6 @@ class TestBonsaiApi(TestCase):
             assert 'model.py' in payload['project_accompanying_files']
             assert 'bridge.py' in filesdata
             assert 'bridge.py' in payload['project_accompanying_files']
-            assert 'sub3/foo.py' in filesdata
-            assert 'sub3/foo.py' in payload['project_accompanying_files']
+            foo_py_filepath = os.path.join('sub3', 'foo.py')
+            assert foo_py_filepath in filesdata
+            assert foo_py_filepath in payload['project_accompanying_files']

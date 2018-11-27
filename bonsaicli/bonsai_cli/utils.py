@@ -93,7 +93,16 @@ def check_dbrains(project=None):
 def check_cli_version(print_up_to_date=True):
     """ Compares local cli version with the one on pypi """
     pypi_url = 'https://pypi.python.org/pypi/bonsai-cli/json'
-    pypi_version = get_pypi_version(pypi_url)
+    pypi_version = None
+    err = None
+    try:
+        pypi_version = get_pypi_version(pypi_url)
+    except requests.exceptions.SSLError as e:
+        err = e
+    except requests.exceptions.RequestException as e:
+        err = e
+    except (decoder.JSONDecodeError, KeyError) as e:
+        err = e
     user_cli_version = __version__
 
     if not pypi_version:
@@ -102,6 +111,21 @@ def check_cli_version(print_up_to_date=True):
         click_echo(
             'Unable to connect to PyPi and determine if CLI is up to date.',
             fg='red')
+        if isinstance(err, requests.exceptions.SSLError):
+            click_echo(
+                'The following SSL error occured while attempting to obtain'
+                ' the version information from PyPi. \n\n{}\n\n'.format(err) +
+                'SSL errors are usually a result of an out of date version of'
+                ' OpenSSL and/or certificates that may need to be updated.'
+                ' We recommend updating your python install to a more'
+                ' recent version. If this is not possible, \'pip install'
+                ' requests[security]\' may fix the problem.',
+                fg='red')
+        elif err:
+            click_echo(
+                'The following error occured while attempting to obtain the'
+                ' version information from PyPi.\n\n{}\n'.format(err),
+                fg='red')
     elif user_cli_version != pypi_version:
         click_echo('You are using bonsai-cli version ' + user_cli_version,
                    fg='yellow')
@@ -141,19 +165,9 @@ def get_pypi_version(pypi_url):
 
     param pypi_url: Url of pypi package
     """
-    try:
-        pkg_request = requests.get(pypi_url)
-        pkg_json = pkg_request.json()
-        pypi_version = pkg_json['info']['version']
-    except requests.exceptions.RequestException:
-        # could not connect to the server
-        # blanket exception that covers various request issues
-        return None
-    except (decoder.JSONDecodeError, KeyError):
-        # could not decode json or key error in dict
-        return None
-
-    # Successfully connected and obtained version info
+    pkg_request = requests.get(pypi_url)
+    pkg_json = pkg_request.json()
+    pypi_version = pkg_json['info']['version']
     return pypi_version
 
 
@@ -176,12 +190,12 @@ def list_profiles(config):
 
       param config: Bonsai_ai.Config
     """
-    if config.file_paths:
-        profile = config.profile
-        click.echo(
-            "\nBonsai configuration file(s) found at {}".format(
-                config.file_paths))
-        click.echo("\nAvailable Profiles:")
+    profile = config.profile
+    click.echo(
+        "\nBonsai configuration file(s) found at {}".format(
+            config.file_paths))
+    click.echo("\nAvailable Profiles:")
+    if profile:
         if profile == "DEFAULT":
             click.echo("  DEFAULT" + " (active)")
         else:
@@ -195,28 +209,26 @@ def list_profiles(config):
             else:
                 click.echo("  " + section)
     else:
-        click.echo("\nCould not locate bonsai configuration file. "
-                   "Please run \'bonsai configure\'.")
+        click.echo("No profiles found please run 'bonsai configure'.")
 
 
 def print_profile_information(config):
     """ Print current active profile information """
-    if config.file_paths:
-        try:
-            profile_info = config._section_items(config.profile)
-        except NoSectionError as e:
-            profile_info = config._defaults().items()
+    try:
+        profile_info = config._section_items(config.profile)
+    except NoSectionError as e:
+        profile_info = config._defaults().items()
 
-        click.echo(
-            "\nBonsai configuration file(s) found at {}".format(
-                config.file_paths))
-        click.echo("\nProfile Information")
-        click.echo("--------------------")
+    click.echo(
+        "\nBonsai configuration file(s) found at {}".format(
+            config.file_paths))
+    click.echo("\nProfile Information")
+    click.echo("--------------------")
+    if profile_info:
         for key, val in profile_info:
             click.echo(key + ": " + str(val))
     else:
-        click.echo("\nCould not locate bonsai configuration file. "
-                   "Please run \'bonsai configure\'.")
+        click.echo("No profiles found please run 'bonsai configure'.")
 
 
 def raise_as_click_exception(*args):

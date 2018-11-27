@@ -114,20 +114,20 @@ def _global_version_check(ctx):
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click.option('--debug', is_flag=True, default=False,
+@click.option('--debug', '-d', is_flag=True, default=False,
               help='Enable verbose debugging output.')
-@click.option('--version', is_flag=True, callback=_version_callback,
+@click.option('--version', '-v', is_flag=True, callback=_version_callback,
               help='Show the version and check if Bonsai is up to date.',
               expose_value=False, is_eager=True)
-@click.option('--sysinfo', is_flag=True, callback=_sysinfo,
+@click.option('--sysinfo', '-s', is_flag=True, callback=_sysinfo,
               help='Show system information.',
               expose_value=False, is_eager=True)
-@click.option('--timeout', type=int,
+@click.option('--timeout', '-t', type=int,
               help='Set timeout for CLI API requests.')
 @click.option('--enable-color/--disable-color', callback=_set_color,
               help='Enable/disable color printing.',
               expose_value=False, is_eager=True, default=None)
-@click.option('--disable-version-check', is_flag=True, default=False)
+@click.option('--disable-version-check', '-dv', is_flag=True, default=False)
 @click.pass_context
 def cli(ctx, debug, timeout, disable_version_check):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
@@ -158,9 +158,9 @@ def brain():
 
 
 @click.command()
-@click.option('--username', help='Provide username.')
-@click.option('--access_key', help='Provide an access key.')
-@click.option('--show', is_flag=True,
+@click.option('--username', '-u', help='Provide username.')
+@click.option('--access-key', '--accesskey', '-a', 'access_key', help='Provide an access key.')
+@click.option('--show', '-s', is_flag=True,
               help='Prints active profile information.')
 @click.pass_context
 def configure(ctx, username, access_key, show):
@@ -204,12 +204,12 @@ def configure(ctx, username, access_key, show):
 
 
 @click.command()
-@click.argument("profile", required=False)
-@click.option("--url", default=None, help="Set the brain api url.")
-@click.option('--show', is_flag=True,
-              help="Prints active profile information")
-@click.option("--help", "-h", "help_option", is_flag=True,
-              help="Show this message and exit.")
+@click.argument('profile', required=False)
+@click.option('--url', '-u', default=None, help='Set the brain api url.')
+@click.option('--show', '-s', is_flag=True,
+              help='Prints active profile information')
+@click.option('--help', '-h', 'help_option', is_flag=True,
+              help='Show this message and exit.')
 @click.pass_context
 def switch(ctx, profile, url, show, help_option):
     """
@@ -255,8 +255,8 @@ def sims():
     pass
 
 
-@click.command("list", short_help="Lists BRAINs owned by current user.")
-@click.option('--json', default=False, is_flag=True,
+@click.command('list', short_help='Lists BRAINs owned by current user.')
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
 @click.pass_context
 def brain_list(ctx, json):
@@ -348,16 +348,16 @@ def _brain_create_err_msg(project):
             else ProjectFile.find(os.getcwd()))
 
 
-@click.command("create",
-               short_help="Create a BRAIN and set the default BRAIN.")
+@click.command('create',
+               short_help='Create a BRAIN and set the default BRAIN.')
 @click.pass_context
-@click.argument("brain_name", default='', required=True)
-@click.option("--project",
+@click.argument('brain_name', default='', required=True)
+@click.option("--project", '-p',
               help='Override to target another project directory.')
-@click.option("--project-type",
+@click.option('--project-type', '-pt',
               help='Specify to download and use demo/starter project files '
                    '(e.g. "demos/cartpole").')
-@click.option('--json', default=False, is_flag=True,
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
 def brain_create_local(ctx, brain_name, project, project_type, json):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
@@ -448,11 +448,11 @@ def brain_delete(ctx, brain_name):
 
 
 @click.command("push")
-@click.option("--brain",
-              help="Override to target another BRAIN.")
-@click.option("--project",
-              help="Override to target another project directory")
-@click.option('--json', default=False, is_flag=True,
+@click.option('--brain', '-b',
+              help='Override to target another BRAIN.')
+@click.option('--project', '-p',
+              help='Override to target another project directory')
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
 @click.pass_context
 def brain_push(ctx, brain, project, json):
@@ -544,10 +544,10 @@ def _print_inkling_errors_or_warnings(errors_or_warnings):
     click.echo()
 
 
-@click.command("pull", help="Downloads project file(s) from a BRAIN.")
-@click.option("--all", is_flag=True,
-              help="Option to pull all files from targeted BRAIN.")
-@click.option("--brain", help="Override to target another BRAIN.")
+@click.command('pull', help='Downloads project file(s) from a BRAIN.')
+@click.option('--all', '-a', is_flag=True,
+              help='Option to pull all files from targeted BRAIN.')
+@click.option('--brain', '-b', help='Override to target another BRAIN.')
 @click.pass_context
 def brain_pull(ctx, all, brain):
     """Pulls files related to the default BRAIN or the
@@ -655,14 +655,14 @@ def brain_train():
     pass
 
 
-@click.command("list")
-@click.option("--brain",
-              help="Override to target another BRAIN.")
-@click.option("--project",
+@click.command('list')
+@click.option('--brain','-b',
+              help='Override to target another BRAIN.')
+@click.option('--project', '-p',
               help='Override to target another project directory.')
-@click.option('--json', default=False, is_flag=True,
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
-@click.option('--verbose', default=False, is_flag=True,
+@click.option('--verbose', '-v', default=False, is_flag=True,
               help='Verbose output.')
 @click.pass_context
 def sims_list(ctx, brain, project, json, verbose):
@@ -698,14 +698,14 @@ def sims_list(ctx, brain, project, json, verbose):
         _global_version_check(ctx)
 
 
-@click.command("start")
-@click.option("--brain",
+@click.command('start')
+@click.option('--brain', '-b',
               help="Override to target another BRAIN.")
-@click.option("--project",
+@click.option('--project', '-p',
               help='Override to target another project directory.')
-@click.option("--remote", 'sim_local', flag_value=False, default=True,
+@click.option('--remote', '-r', 'sim_local', flag_value=False, default=True,
               help='Run a simulator remotely on Bonsai\'s servers.')
-@click.option('--json', default=False, is_flag=True,
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
 @click.pass_context
 def brain_train_start(ctx, brain, project, sim_local, json):
@@ -740,11 +740,11 @@ def brain_train_start(ctx, brain, project, sim_local, json):
         _global_version_check(ctx)
 
 
-@click.command("status")
-@click.option("--brain", help="Override to target another BRAIN.")
-@click.option('--json', default=False, is_flag=True,
+@click.command('status')
+@click.option('--brain', '-b', help="Override to target another BRAIN.")
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
-@click.option("--project",
+@click.option('--project', '-p',
               help='Override to target another project directory.')
 @click.pass_context
 def brain_train_status(ctx, brain, json, project):
@@ -763,14 +763,14 @@ def brain_train_status(ctx, brain, json, project):
         click.echo(dumps(status, indent=4, sort_keys=True))
     else:
         config = Config(argv=sys.argv[0])
-        if config.file_paths:
-            click.secho('Configuration Information', bold=True)
-            click.echo('-'*27)
-            click.echo('Profile: {}'.format(config.profile))
-            click.echo(
-                'Configuration file(s) found at: {}'.format(config.file_paths))
+        click.secho('Configuration Information', bold=True)
+        click.echo('-'*27)
+        click.echo('Profile: {}'.format(config.profile))
+        click.echo(
+            'Configuration file(s) found at: {}'.format(config.file_paths))
         click.secho("\nStatus for {}:".format(brain), bold=True)
         click.echo('-'*20)
+
         keys = list(status.keys())
         keys.sort()
         rows = ((k, status[k]) for k in keys)
@@ -782,11 +782,11 @@ def brain_train_status(ctx, brain, json, project):
 
 
 @click.command("stop")
-@click.option("--brain",
+@click.option('--brain', '-b',
               help="Override to target another BRAIN.")
-@click.option("--project",
+@click.option('--project', '-p',
               help='Override to target another project directory.')
-@click.option('--json', default=False, is_flag=True,
+@click.option('--json', '-j', default=False, is_flag=True,
               help='Output json.')
 @click.pass_context
 def brain_train_stop(ctx, brain, project, json):
@@ -807,14 +807,14 @@ def brain_train_stop(ctx, brain, project, json):
         _global_version_check(ctx)
 
 
-@click.command("resume")
-@click.option("--brain",
+@click.command('resume')
+@click.option('--brain', '-b',
               help="Override to target another BRAIN")
-@click.option("--project",
+@click.option('--project', '-p',
               help='Override to target another project directory.')
-@click.option("--remote", 'sim_local', flag_value=False, default=True,
+@click.option('--remote', '-r',  'sim_local', flag_value=False, default=True,
               help='Resume simulator remotely on Bonsai\'s servers.')
-@click.option("--json", default=False, is_flag=True,
+@click.option('--json', '-j', default=False, is_flag=True,
               help="Output json.")
 @click.pass_context
 def brain_train_resume(ctx, brain, project, sim_local, json):
@@ -844,8 +844,9 @@ def brain_train_resume(ctx, brain, project, sim_local, json):
 
 NETWORK_HELP_STRING = \
     """
-    Please make sure the following endpoints, protocols, and ports are
-    available on your network.
+    Please make sure you are connected to the internet and check
+    if the following endpoints, protocols, and ports are available on
+    your network.
 
     ---------------------------------------------------------
     | Endpoint          | Protocol              | Port      |
@@ -866,83 +867,94 @@ NETWORK_HELP_STRING = \
 def diagnose():
     # TODO Place link to bonsai network documentation in error messages
     """Runs several tests to validate that the cli is working correctly"""
-    click_echo('-' * 35)
+    click_echo('-' * 70)
     check_cli_version()
     _check_beta_status()
-    _run_network_tests()
+    _validate_config()
+    with CliRunner().isolated_filesystem():
+        _websocket_test()
     click_echo('Success all tests passed!', fg='green')
 
 
 def _check_beta_status():
-    click_echo('-' * 35)
+    click_echo('-' * 70)
     click_echo('Checking status of https://beta.bons.ai.', fg='yellow')
-    response = requests.get('https://beta.bons.ai/v1/status')
+    try:
+        response = requests.get('https://beta.bons.ai/v1/status')
+    except requests.exceptions.RequestException as e:
+        raise_as_click_exception(
+            e,
+            'Unable to request status from https://beta.bons.ai \n' +
+            NETWORK_HELP_STRING)
     if response.status_code != 200:
         raise_as_click_exception(
             'Unable to request status from https://beta.bons.ai \n' +
             NETWORK_HELP_STRING)
     click_echo('Success! Beta is online.', fg='green')
-    click_echo('-' * 35)
+    click_echo('-' * 70)
 
 
-def _run_network_tests():
+def _validate_config():
     click_echo('Validating Configuration.', fg='yellow')
-    _api = api()
     try:
-        content = _api.validate()
+        content = api().validate()
     except BrainServerError:
         raise_as_click_exception(
             'Unable to validate configuration',
             'Please run \'bonsai configure\' to setup configuration.'
             '\n' + NETWORK_HELP_STRING)
     click_echo('Success! Configuration is valid.', fg='green')
-    click_echo('-' * 35)
+    click_echo('-' * 70)
 
-    runner = CliRunner()
-    with runner.isolated_filesystem():
+
+def _websocket_test():
+    click_echo(
+        'Downloading cartpole demo to test websocket...', fg='yellow')
+    try:
+        files = api().get_project('demos', 'cartpole')
+    except BrainServerError:
+        raise_as_click_exception(
+            'Error while attempting to download cartpole demo from '
+            'https://api.bons.ai.\n' + NETWORK_HELP_STRING)
+    click_echo('Success! Downloaded cartpole demo.', fg='green')
+    click_echo('-' * 70)
+
+    for filename in files:
+        with open(filename, "wb") as outfile:
+            outfile.write(files[filename])
+
+    click_echo(
+        'Testing websocket connection (This may take up to a minute).',
+        fg='yellow')
+    try:
+        result = subprocess.check_output(
+            ['python', 'bridge.py',
+             '--brain', 'foo--s',
+             '--retry-timeout', '0'],
+            stderr=subprocess.STDOUT, timeout=90)
+        result = result.decode('utf-8')
+        log.debug('Output of websocket test: {}'.format(result))
+    except subprocess.CalledProcessError as e:
+        raise_as_click_exception(
+            'Subprocess error!\n' + e.output.decode('utf-8') +
+            '\n' + NETWORK_HELP_STRING)
+    except subprocess.TimeoutExpired:
+        # Set timeout longer than network timeout to avoid infinite loops
+        raise_as_click_exception(
+            'Error attempting to connect to wss://api.bons.ai.\n' +
+            NETWORK_HELP_STRING)
+
+    success = {'foo--s does not exist',
+               'ws_close_code: None',
+               'ws_close_code: 1008'}
+    if any(rsn in result for rsn in success):
         click_echo(
-            'Downloading cartpole demo to test websocket...', fg='yellow')
-        try:
-            files = _api.get_project('demos', 'cartpole')
-        except BrainServerError:
-            raise_as_click_exception(
-                'Error while attempting to download cartpole demo from '
-                'https://api.bons.ai.\n' + NETWORK_HELP_STRING)
-        click_echo('Success! Downloaded cartpole demo.', fg='green')
-        click_echo('-' * 35)
-
-        for filename in files:
-            with open(filename, "wb") as outfile:
-                outfile.write(files[filename])
-
-        click_echo(
-            'Testing websocket connection (This may take up to a minute).',
-            fg='yellow')
-        try:
-            result = subprocess.check_output(
-                ['python', 'bridge.py',
-                 '--brain', 'foo--s',
-                 '--retry-timeout', '0'],
-                stderr=subprocess.STDOUT, timeout=90)
-            result = result.decode('utf-8')
-            log.debug('Output of websocket test: {}'.format(result))
-        except subprocess.CalledProcessError as e:
-            raise_as_click_exception(
-                'Subprocess error!\n' + e.output.decode('utf-8') +
-                '\n' + NETWORK_HELP_STRING)
-        except subprocess.TimeoutExpired:
-            # Set timeout longer than network timeout to avoid infinite loops
-            raise_as_click_exception(
-                'Error attempting to connect to wss://api.bons.ai.\n' +
-                NETWORK_HELP_STRING)
-        if 'foo--s does not exist' in result:
-            click_echo(
-                'Success! Websocket connected.', fg='green')
-        else:
-            raise_as_click_exception(
-                'Error attempting to connect to wss://api.bons.ai.\n' +
-                NETWORK_HELP_STRING)
-        click_echo('-' * 35)
+            'Success! Websocket connected.', fg='green')
+    else:
+        raise_as_click_exception(
+            'Error attempting to connect to wss://api.bons.ai.\n' +
+            NETWORK_HELP_STRING)
+    click_echo('-' * 70)
 
 
 # Compose the commands defined above.

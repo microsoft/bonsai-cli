@@ -526,7 +526,7 @@ class TestMockedBrainCommand(TestCase):
                 cli, ['switch', '--url', 'FOO', 'FIZZ'])
             # Run `bonsai configure --key <some_key>`
             result = self.runner.invoke(
-                cli, ['configure', '--access_key', ACCESS_KEY], input=USERNAME)
+                cli, ['configure', '--access-key', ACCESS_KEY], input=USERNAME)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             # Check ~/.bonsai
             path = os.path.expanduser('~/.bonsai')
@@ -549,7 +549,7 @@ class TestMockedBrainCommand(TestCase):
                 'configure',
                 '--username',
                 USERNAME,
-                '--access_key',
+                '--access-key',
                 ACCESS_KEY
             ]
             result = self.runner.invoke(cli, cli_args)
@@ -579,7 +579,7 @@ class TestMockedBrainCommand(TestCase):
                 'configure',
                 '--username',
                 USERNAME,
-                '--access_key',
+                '--access-key',
                 ACCESS_KEY
             ]
             result = self.runner.invoke(cli, cli_args)
@@ -716,7 +716,7 @@ class TestMockedBrainCommand(TestCase):
                 'configure',
                 '--username',
                 USERNAME,
-                '--access_key',
+                '--access-key',
                 ACCESS_KEY
             ]
             self.runner.invoke(cli, cli_args)
@@ -1593,11 +1593,12 @@ class TestSysInfo(TestCase):
             self.assertIn("Package", result.output)
             self.assertIn("Profile", result.output)
 
-    def test_no_dotbonsai(self):
+    def test_no_profiles_in_dotbonsai(self):
         with temp_filesystem(self):
             result = self.runner.invoke(cli, ['--sysinfo'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
 
             # assert that there is no profile info to print
             self.assertIn(
-                "Could not locate bonsai configuration", result.output)
+                "No profiles found please run \'bonsai configure\'",
+                result.output)

@@ -51,7 +51,8 @@ class TestProjectFile(TestCase):
             open('sub/sub2/one.ink', 'a').close()
             pf = ProjectFile()
             pf.files.add('./')
-            self.assertEqual(pf.inkling_file, 'sub/sub2/one.ink')
+            inkling_filepath = os.path.join('sub', 'sub2', 'one.ink')
+            self.assertEqual(pf.inkling_file, inkling_filepath)
             self.assertTrue(os.path.isfile(pf.inkling_file))
 
     def test_outside_dir(self):

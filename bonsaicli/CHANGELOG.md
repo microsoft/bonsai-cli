@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.33
+- #7848: Bonsai diagnose exits gracefully if user is not connected to internet
+- #7654: Print useful message when SSL errors occur during version check
+- #7802: Add short aliases to all options in cli
+
+## 0.8.32
+- #7666: Fix bonsaicli unit tests windows
+- #6694: Remove warning spam in config
+- #7408: Fix bug in bonsai diagnose
+
 ## 0.8.31
 ### Added
 - Every command will check if bonsai is up to date. It can be disabled using `bonsai --disable-version-check [COMMAND]`
