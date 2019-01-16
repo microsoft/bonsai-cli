@@ -29,7 +29,7 @@ from bonsai_cli.projfile import (
     ProjectFile, ProjectFileInvalidError, FileTooLargeError)
 from bonsai_cli.utils import (
     api, brain_fallback, check_dbrains, check_cli_version, click_echo,
-    get_default_brain, list_profiles, print_profile_information, 
+    get_default_brain, list_profiles, print_profile_information,
     raise_as_click_exception)
 
 
@@ -872,6 +872,7 @@ def diagnose():
     _check_beta_status()
     _validate_config()
     with CliRunner().isolated_filesystem():
+        _download_cartpole_demo()
         _websocket_test()
     click_echo('Success all tests passed!', fg='green')
 
@@ -907,7 +908,7 @@ def _validate_config():
     click_echo('-' * 70)
 
 
-def _websocket_test():
+def _download_cartpole_demo():
     click_echo(
         'Downloading cartpole demo to test websocket...', fg='yellow')
     try:
@@ -918,16 +919,18 @@ def _websocket_test():
             'https://api.bons.ai.\n' + NETWORK_HELP_STRING)
     click_echo('Success! Downloaded cartpole demo.', fg='green')
     click_echo('-' * 70)
-
     for filename in files:
         with open(filename, "wb") as outfile:
             outfile.write(files[filename])
 
+
+def _websocket_test():
     click_echo(
         'Testing websocket connection (This may take up to a minute).',
         fg='yellow')
     try:
         result = subprocess.check_output(
+            # TODO TASK #9700: Update this command on next beta deploy
             ['python', 'bridge.py',
              '--brain', 'foo--s',
              '--retry-timeout', '0'],
@@ -938,11 +941,6 @@ def _websocket_test():
         raise_as_click_exception(
             'Subprocess error!\n' + e.output.decode('utf-8') +
             '\n' + NETWORK_HELP_STRING)
-    except subprocess.TimeoutExpired:
-        # Set timeout longer than network timeout to avoid infinite loops
-        raise_as_click_exception(
-            'Error attempting to connect to wss://api.bons.ai.\n' +
-            NETWORK_HELP_STRING)
 
     success = {'foo--s does not exist',
                'ws_close_code: None',

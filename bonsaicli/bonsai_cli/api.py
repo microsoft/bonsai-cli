@@ -92,7 +92,12 @@ def _dict(response):
     :return: Dictionary form the JSON text in the response.
     """
     if response and response.text and response.text.strip():
-        return response.json()
+        try:
+            response_dict = response.json()
+        except ValueError as e:
+            msg = 'Unable to decode json from {}\n{}'.format(response.url, e)
+            _handle_and_raise(response, msg)
+        return response_dict
     return {}
 
 

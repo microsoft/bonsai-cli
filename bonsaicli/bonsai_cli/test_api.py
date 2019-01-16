@@ -14,7 +14,7 @@ import requests
 from requests.exceptions import HTTPError, ConnectionError
 from click.testing import CliRunner
 
-from bonsai_cli.api import BrainServerError, BonsaiAPI
+from bonsai_cli.api import BrainServerError, BonsaiAPI, _dict
 from bonsai_cli.projfile import ProjectFile
 
 
@@ -970,3 +970,9 @@ class TestBonsaiApi(TestCase):
             foo_py_filepath = os.path.join('sub3', 'foo.py')
             assert foo_py_filepath in filesdata
             assert foo_py_filepath in payload['project_accompanying_files']
+
+    def test_json_decode_error(self):
+        mock_response = Mock()
+        mock_response.json.side_effect = ValueError()
+        with self.assertRaises(BrainServerError):
+            _dict(mock_response)

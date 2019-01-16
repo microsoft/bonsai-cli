@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.34
+- #7858: Bonsai diagnose unit tests
+- #9617: Print clean error message on JSON decode errors
+
 ## 0.8.33
 - #7848: Bonsai diagnose exits gracefully if user is not connected to internet
 - #7654: Print useful message when SSL errors occur during version check

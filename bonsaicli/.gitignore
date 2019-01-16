@@ -71,8 +71,6 @@ web-test-results
 .cache/
 junit-*.xml
 *-gtest.xml
-.testmon*
-.tmontmp/
 
 # Compiled inkling files
 *.inkb
