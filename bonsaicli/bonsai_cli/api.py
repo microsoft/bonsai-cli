@@ -3,18 +3,17 @@ import json
 import os
 import sys
 
-try:
-    from urllib.parse import urljoin
+if sys.version_info >= (3, ):
+    from urllib.parse import urljoin, unquote
     from urllib.request import getproxies
-except ImportError:
+else:
     from urlparse import urljoin
-    from urllib import getproxies
+    from urllib import getproxies, unquote
 
 import click
 import email
 import requests
 import requests.exceptions
-from requests.compat import unquote
 from bonsai_cli import __version__
 from bonsai_ai.logger import Logger
 
@@ -62,10 +61,10 @@ def _handle_and_raise(response, e):
     raise BrainServerError('{}\n{}'.format(e, message))
 
 
-def _handles_connection_error(func):
+def _handles_connection_and_timeout_error(func):
     """
-    Decorator for handling ConnectionErrors raised by the requests
-    library, raises a BrainServerError instead.
+    Decorator for handling ConnectionErrors and Timeouts raised by 
+    the requests library, raises a BrainServerError instead.
 
     :param func: the function being decorated
     """
@@ -76,6 +75,11 @@ def _handles_connection_error(func):
         except requests.exceptions.ConnectionError as e:
             message = "Unable to connect to domain: {}".format(url)
             raise BrainServerError(message)
+        except requests.exceptions.Timeout as e:
+            raise BrainServerError(
+                'Request to {} timed out. Current timeout is {} seconds. ' \
+                'Use the --timeout/-t option to adjust the ' \
+                'timeout.'.format(url, self.TIMEOUT))
 
     return _handler
 
@@ -154,7 +158,7 @@ class BonsaiAPI(object):
             bonsai_cli_version, python_version, platform)
         return user_info
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _post(self, url, data=None):
         """
         Issues a POST request.
@@ -177,7 +181,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _post_raw_data(self, url, data=None, headers=None):
         """
         Issues a POST request without encoding data argument.
@@ -205,7 +209,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _put_raw_data(self, url, data=None, headers=None):
         """
         Issues a POST request without encoding data argument.
@@ -233,7 +237,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _put(self, url, data=None):
         """
         Issues a PUT request.
@@ -257,7 +261,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _get(self, url):
         """
         Issues a GET request.
@@ -276,7 +280,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _get_multipart(self, url):
         """
         Issues a GET request for a multipart/mixed response
@@ -322,7 +326,7 @@ class BonsaiAPI(object):
         except requests.exceptions.HTTPError as e:
             _handle_and_raise(response, e)
 
-    @_handles_connection_error
+    @_handles_connection_and_timeout_error
     def _delete(self, url):
         """
         Issues a DELETE request.
@@ -585,6 +589,7 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
         return self._get_multipart(url=url)
 
+    @_handles_connection_and_timeout_error
     def _get_info(self, brain_name):
         url_path = _GET_INFO_URL_PATH_TEMPLATE.format(
             username=self._user_name,

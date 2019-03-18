@@ -976,3 +976,35 @@ class TestBonsaiApi(TestCase):
         mock_response.json.side_effect = ValueError()
         with self.assertRaises(BrainServerError):
             _dict(mock_response)
+
+    @patch('bonsai_cli.api.requests.Session.post')
+    @patch('bonsai_cli.api.requests.Session.delete')
+    @patch('bonsai_cli.api.requests.Session.get')
+    @patch('bonsai_cli.api.requests.Session.put')
+    def testTimeoutRaiseError(self, mock_put, mock_get, mock_delete, mock_post):
+        """
+        Test that a timeout error gets wrapped as a BrainServerError
+        """
+
+        # Construct mock response object and relevant function behavior
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = requests.exceptions.Timeout()
+
+        # Assign mock response to our patched function
+        mock_put.return_value = mock_response
+        mock_get.return_value = mock_response
+        mock_delete.return_value = mock_response
+        mock_post.return_value = mock_response
+
+        # Call API functions we are testing
+        with self.assertRaises(BrainServerError):
+            self.tempapi.stop_training_brain('fakebrain')
+
+        with self.assertRaises(BrainServerError):
+            self.tempapi.list_brains()
+
+        with self.assertRaises(BrainServerError):
+            self.tempapi.delete_brain('fakebrain')
+
+        with self.assertRaises(BrainServerError):
+            self.tempapi.validate()

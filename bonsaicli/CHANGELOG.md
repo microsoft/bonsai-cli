@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.35
+- #10046: Fix pip import in cli for newer version of pip
+- #10533: Request timeouts should not show a stack trace
+- #10623: Fix file too large tests
+
 ## 0.8.34
 - #7858: Bonsai diagnose unit tests
 - #9617: Print clean error message on JSON decode errors

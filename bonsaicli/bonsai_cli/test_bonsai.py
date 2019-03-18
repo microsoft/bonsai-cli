@@ -384,14 +384,15 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue('ERROR: Bonsai Command Failed' in result.output)
 
-    def test_brain_create_file_too_large(self):
+    @patch('bonsai_cli.projfile.os.path.getsize')
+    def test_brain_create_file_size_too_large(self, mock_os_getsize):
+        mock_os_getsize.return_value = 99999999
         with temp_filesystem(self):
             _add_config()
             db = DotBrains()
             db.add('mybrain')
 
             with open('bigfile.txt', 'wb') as f:
-                f.seek(1073741824-1)
                 f.write(b"\0")
 
             pf = ProjectFile()
@@ -1054,14 +1055,15 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue('Multiple inkling ' in result.output)
 
-    def test_brain_push_file_size_too_large(self):
+    @patch('bonsai_cli.projfile.os.path.getsize')
+    def test_brain_push_file_size_too_large(self, mock_os_getsize):
+        mock_os_getsize.return_value = 99999999
         with temp_filesystem(self):
             _add_config()
             db = DotBrains()
             db.add('mybrain')
 
             with open('bigfile.txt', 'wb') as f:
-                f.seek(1073741824-1)
                 f.write(b"\0")
 
             pf = ProjectFile()
@@ -1597,20 +1599,23 @@ class TestBonsaiDiagnose(TestCase):
 
     @patch('requests.get')
     def test_check_beta_status_error(self, patch_request):
-        patch_request.side_effect = requests.exceptions.RequestException()
-        with self.assertRaises(ClickException):
-            _check_beta_status()
+        with temp_filesystem(self):
+            patch_request.side_effect = requests.exceptions.RequestException()
+            with self.assertRaises(ClickException):
+                _check_beta_status()
 
     @patch('requests.get')
     def test_check_beta_status_error_code(self, patch_request):
-        patch_request.return_value.status_code = 404
-        with self.assertRaises(ClickException):
-            _check_beta_status()
+        with temp_filesystem(self):
+            patch_request.return_value.status_code = 404
+            with self.assertRaises(ClickException):
+                _check_beta_status()
 
     @patch('requests.get')
     def test_check_beta_status_success(self, patch_request):
-        patch_request.return_value.status_code = 200
-        _check_beta_status()
+        with temp_filesystem(self):
+            patch_request.return_value.status_code = 200
+            _check_beta_status()
 
     @patch('bonsai_cli.api.BonsaiAPI.validate')
     def test_validate_config_error(self, patch_request):
@@ -1645,24 +1650,27 @@ class TestBonsaiDiagnose(TestCase):
 
     @patch('subprocess.check_output')
     def test_websocket_subprocess_error(self, patch_subprocess):
-        patch_subprocess.side_effect = subprocess.CalledProcessError(
-            1, 'foo', output=b'bar')
-        with self.assertRaises(ClickException):
-            _websocket_test()
+        with temp_filesystem(self):
+            patch_subprocess.side_effect = subprocess.CalledProcessError(
+                1, 'foo', output=b'bar')
+            with self.assertRaises(ClickException):
+                _websocket_test()
 
     @patch('subprocess.check_output')
     def test_websocket_success(self, patch_subprocess):
-        patch_subprocess.return_value = b'foo--s does not exist'
-        _websocket_test()
+        with temp_filesystem(self):
+            patch_subprocess.return_value = b'foo--s does not exist'
+            _websocket_test()
 
-        patch_subprocess.return_value = b'ws_close_code: None'
-        _websocket_test()
+            patch_subprocess.return_value = b'ws_close_code: None'
+            _websocket_test()
 
-        patch_subprocess.return_value = b'ws_close_code: 1008'
-        _websocket_test()
+            patch_subprocess.return_value = b'ws_close_code: 1008'
+            _websocket_test()
 
     @patch('subprocess.check_output')
     def test_websocket_failure(self, patch_subprocess):
-        patch_subprocess.return_value = b'Unable to connect'
-        with self.assertRaises(ClickException):
-            _websocket_test()
+        with temp_filesystem(self):
+            patch_subprocess.return_value = b'Unable to connect'
+            with self.assertRaises(ClickException):
+                _websocket_test()

@@ -6,13 +6,16 @@ The `main` function in this file will be an entry point for execution
 as specified by setup.py.
 """
 import os
-import pip
 import platform
 import pprint
 import sys
 import time
 import subprocess
 from json import dumps
+try:
+    from pip._internal.utils.misc import get_installed_distributions
+except ImportError:
+    from pip import get_installed_distributions
 
 import click
 import requests
@@ -34,8 +37,9 @@ from bonsai_cli.utils import (
 
 
 # Use input with Python3 and raw_input with Python2
-prompt_user = input
-if sys.version[0] == '2':
+if sys.version_info >= (3, ):
+    prompt_user = input
+else:
     prompt_user = raw_input
 
 log = Logger()
@@ -84,7 +88,7 @@ def _sysinfo(ctx, param, value):
     click.echo("\nPlatform Information\n--------------------")
     click.echo(sys.version)
     click.echo(platform.platform())
-    packages = pip.utils.get_installed_distributions()
+    packages = get_installed_distributions()
     click.echo("\nPackage Information\n-------------------")
     click.echo(pprint.pformat(packages))
     click.echo("\nBonsai Profile Information\n--------------------------")
@@ -931,10 +935,10 @@ def _websocket_test():
     try:
         result = subprocess.check_output(
             # TODO TASK #9700: Update this command on next beta deploy
-            ['python', 'bridge.py',
+            ['python', 'cartpole_simulator.py',
              '--brain', 'foo--s',
              '--retry-timeout', '0'],
-            stderr=subprocess.STDOUT, timeout=90)
+            stderr=subprocess.STDOUT)
         result = result.decode('utf-8')
         log.debug('Output of websocket test: {}'.format(result))
     except subprocess.CalledProcessError as e:
