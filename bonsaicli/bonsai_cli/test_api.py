@@ -16,6 +16,7 @@ from click.testing import CliRunner
 
 from bonsai_cli.api import BrainServerError, BonsaiAPI, _dict
 from bonsai_cli.projfile import ProjectFile
+from typing import Any, cast
 
 
 class TestBonsaiApi(TestCase):
@@ -34,7 +35,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, cast(Any, Mock()))
         expected_dict = {"username": "someuser"}
         mock_response.json.return_value = expected_dict
 
@@ -62,7 +63,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for validate
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -96,7 +97,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = HTTPError()
 
         # Assign mock response to our patched function
@@ -122,7 +123,7 @@ class TestBonsaiApi(TestCase):
     def testCreateBrain(self, mock_post):
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -148,7 +149,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for create
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -179,7 +180,7 @@ class TestBonsaiApi(TestCase):
     def testCreateBrainWithProjectType(self, mock_post):
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -207,7 +208,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -227,7 +228,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = HTTPError()
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -248,7 +249,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         brains = [
             {"name": "brain_a", "state": "Stopped"},
             {"name": "brain_b", "state": "Not Started"}
@@ -278,7 +279,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for list
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_get.return_value = mock_response
@@ -308,7 +309,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = HTTPError()
 
         # Assign mock response to our patched function
@@ -335,7 +336,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.text = None
 
         # Assign mock response to our patched function
@@ -361,7 +362,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         brain_status = {
             "state": "training",
             "episode": 23,
@@ -393,7 +394,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for get brain status
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_get.return_value = mock_response
@@ -423,7 +424,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         expected_dict = {
             "cartpole_sim_0": {
                 "instances": 1,
@@ -459,7 +460,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for list sims
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_get.return_value = mock_response
@@ -489,7 +490,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.text = 'FOO'
         mock_response.headers = {'FOO': 'BAR'}
 
@@ -518,7 +519,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for getting brain files
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.text = 'FOO'
         mock_response.headers = {'FOO': 'BAR'}
 
@@ -554,7 +555,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         brains = [
             {"name": "brain_a", "state": "Stopped"},
             {"name": "brain_b", "state": "Not Started"}
@@ -586,7 +587,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for list sims
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_delete.return_value = mock_response
@@ -618,7 +619,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = HTTPError()
 
         # Assign mock response to our patched function
@@ -646,7 +647,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -672,7 +673,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for starting training
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -706,7 +707,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -732,7 +733,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for stopping training
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -766,7 +767,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = HTTPError()
 
         # Assign mock response to our patched function
@@ -795,7 +796,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -813,7 +814,7 @@ class TestBonsaiApi(TestCase):
         Test that url's are joined correctly for editing brain
         """
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -840,7 +841,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = HTTPError()
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -860,7 +861,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = ConnectionError()
 
         # Assign mock response to our patched function
@@ -883,7 +884,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.status_code = 301
 
         # Assign mock response to our patched function
@@ -972,7 +973,7 @@ class TestBonsaiApi(TestCase):
             assert foo_py_filepath in payload['project_accompanying_files']
 
     def test_json_decode_error(self):
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.json.side_effect = ValueError()
         with self.assertRaises(BrainServerError):
             _dict(mock_response)
@@ -987,7 +988,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = Mock()
+        mock_response = cast(Any, Mock())
         mock_response.raise_for_status.side_effect = requests.exceptions.Timeout()
 
         # Assign mock response to our patched function

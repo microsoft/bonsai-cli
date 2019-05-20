@@ -32,7 +32,7 @@ class ProjectDefault():
 
 
 class ProjectFile():
-    def __init__(self, path=DEFAULT_FILE):
+    def __init__(self, path: str=DEFAULT_FILE):
         self.content = self._read(path)
         self.project_path = path
         files = self.content.get('files', [])

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.36
+- Pyright bugs
+
 ## 0.8.35
 - #10046: Fix pip import in cli for newer version of pip
 - #10533: Request timeouts should not show a stack trace

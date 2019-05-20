@@ -175,7 +175,8 @@ def configure(ctx, username, access_key, show):
         username = click.prompt("Username")
 
     if not access_key:
-        if bonsai_config.url == 'https://api.bons.ai':
+        if (bonsai_config.url == 'https://api.bons.ai' or
+                bonsai_config.url is None):
             key_url = 'https://beta.bons.ai/accounts/settings/key'
         else:
             key_url = bonsai_config.url + "/accounts/settings/key"

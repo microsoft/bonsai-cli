@@ -27,6 +27,7 @@ from bonsai_cli.bonsai import (
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
 from bonsai_cli.utils import get_pypi_version
+from typing import Any, cast
 
 SUCCESS_EXIT_CODE = 0
 FAILURE_EXIT_CODE = 1
@@ -108,7 +109,7 @@ class TestMockedBrainCommand(TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
-        self.api = Mock()
+        self.api = cast(Any, Mock())
         patcher = patch('bonsai_cli.bonsai.api',
                         new=Mock(return_value=self.api))
         version_check_patcher = patch('bonsai_cli.bonsai.check_cli_version',
