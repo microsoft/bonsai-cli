@@ -1,32 +1,32 @@
-import os
-import sys
-from configparser import NoSectionError
-from json import decoder
-
 import click
 import requests
-from click._compat import get_text_stderr
+import os
+import sys
+
 from bonsai_ai import Config
 from bonsai_cli import __version__
 from bonsai_cli.api import BonsaiAPI, BrainServerError
 from bonsai_cli.dotbrains import DotBrains
-from bonsai_cli.projfile import (
-    ProjectFile, ProjectFileInvalidError, FileTooLargeError)
+from bonsai_cli.projfile import ProjectFile
+from click._compat import get_text_stderr
+from configparser import NoSectionError
+from json import decoder
 
 
-def api():
+def api(use_aad=False):
     """
     Convenience function for creating and returning an API object.
     :return: An API object.
     """
-    bonsai_config = Config(argv=sys.argv[0])
+    bonsai_config = Config(argv=sys.argv[0],
+                           control_plane_auth=True,
+                           use_aad=use_aad)
     verify_required_configuration(bonsai_config)
     return BonsaiAPI(access_key=bonsai_config.accesskey,
                      user_name=bonsai_config.username,
                      api_url=bonsai_config.url,
                      ws_url=bonsai_config._websocket_url(),
                      )
-
 
 def brain_fallback(brain, project):
     """
@@ -59,7 +59,7 @@ def click_echo(text, fg=None, bg=None):
      param bg: background color
     """
     try:
-        config = Config(argv=sys.argv[0])
+        config = Config(argv=sys.argv[0], control_plane_auth=True)
         color = config.use_color
     except ValueError:
         color = False
@@ -241,7 +241,7 @@ def raise_as_click_exception(*args):
     one of its subclasses), or a message string followed by an Exception.
     """
     try:
-        config = Config(argv=sys.argv[0])
+        config = Config(argv=sys.argv[0], control_plane_auth=True)
         color = config.use_color
     except ValueError:
         color = False
@@ -269,11 +269,11 @@ def verify_required_configuration(bonsai_config):
     messages = []
     missing_config = False
 
-    if not bonsai_config.accesskey:
+    if (not bonsai_config.use_aad and not bonsai_config.accesskey):
         messages.append("Your access key is not configured.")
         missing_config = True
 
-    if not bonsai_config.username:
+    if not bonsai_config._aad_client and not bonsai_config.username:
         messages.append("Your username is not confgured.")
         missing_config = True
 

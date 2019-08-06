@@ -1,7 +1,8 @@
-import functools
+from bonsai_ai.aria_writer import AriaWriter, StartTrainingBrain
 import json
 import os
 import sys
+from uuid import uuid4
 
 if sys.version_info >= (3, ):
     from urllib.parse import urljoin, unquote
@@ -13,9 +14,10 @@ else:
 import click
 import email
 import requests
-import requests.exceptions
 from bonsai_cli import __version__
 from bonsai_ai.logger import Logger
+from bonsai_ai.aad import AADClient
+from bonsai_ai.exceptions import UsageError
 
 from requests.packages.urllib3.fields import RequestField
 from requests.packages.urllib3.filepost import encode_multipart_formdata
@@ -36,7 +38,6 @@ _STOP_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/stop"
 _RESUME_URL_PATH_TEMPLATE = "/v1/{username}/{brain}/{version}/resume"
 _GET_PROJECT_URL_PATH_TEMPLATE = "/v1/projects/{category}/{name}"
 
-
 log = Logger()
 
 
@@ -47,7 +48,7 @@ class BrainServerError(Exception):
     pass
 
 
-def _handle_and_raise(response, e):
+def _handle_and_raise(response, e, request_id):
     """
     This takes an exception and wraps it in a BrainServerError.
     :param response: The response from the server.
@@ -58,33 +59,18 @@ def _handle_and_raise(response, e):
             response.json()["error"])
     except:
         message = 'Request failed.'
+
+    message + 'Request ID: {}'.format(request_id)
+
+    try:
+        message += '\nSpan ID: {}'.format(response.headers['SpanID'])
+    except KeyError:
+        pass
+
     raise BrainServerError('{}\n{}'.format(e, message))
 
 
-def _handles_connection_and_timeout_error(func):
-    """
-    Decorator for handling ConnectionErrors and Timeouts raised by 
-    the requests library, raises a BrainServerError instead.
-
-    :param func: the function being decorated
-    """
-    @functools.wraps(func)
-    def _handler(self, url, *args, **kwargs):
-        try:
-            return func(self, url, *args, **kwargs)
-        except requests.exceptions.ConnectionError as e:
-            message = "Unable to connect to domain: {}".format(url)
-            raise BrainServerError(message)
-        except requests.exceptions.Timeout as e:
-            raise BrainServerError(
-                'Request to {} timed out. Current timeout is {} seconds. ' \
-                'Use the --timeout/-t option to adjust the ' \
-                'timeout.'.format(url, self.TIMEOUT))
-
-    return _handler
-
-
-def _dict(response):
+def _dict(response, request_id):
     """
     Translates the response from the server into a dictionary. The implication
     is that the server should send back a JSON response for every REST API
@@ -100,7 +86,7 @@ def _dict(response):
             response_dict = response.json()
         except ValueError as e:
             msg = 'Unable to decode json from {}\n{}'.format(response.url, e)
-            _handle_and_raise(response, msg)
+            _handle_and_raise(response, msg, request_id)
         return response_dict
     return {}
 
@@ -119,7 +105,8 @@ class BonsaiAPI(object):
     # constant class variable for request timeout time in seconds
     TIMEOUT = 300
 
-    def __init__(self, access_key, user_name, api_url, ws_url=None):
+    def __init__(self, access_key, user_name, api_url,
+                 ws_url=None, disable_telemetry=False):
         """
         Initializes the API object.
         :param access_key: The access key for the user. This can be obtained
@@ -140,9 +127,23 @@ class BonsaiAPI(object):
         self._user_info = self._get_user_info()
         self._session = requests.Session()
         self._session.proxies = getproxies()
+        self._aria_writer = AriaWriter(
+            cluster_url=api_url, 
+            disable_telemetry=disable_telemetry)
+
+        # In the event of the writer being instantiated but no tracking event 
+        # being sent a deadlock occurs. This flag is used to skip calling the
+        # code causing the deadlock
+        self._skip_aria_writer_close = False
+
         log.debug('API URL = {}'.format(self._api_url))
         log.debug('WS URL = {}'.format(self._ws_url))
         log.debug('User Info = {}'.format(self._user_info))
+
+    def __del__(self):
+        if self._skip_aria_writer_close:
+            return
+        self._aria_writer.close()
 
     @staticmethod
     def _get_user_info():
@@ -158,7 +159,137 @@ class BonsaiAPI(object):
             bonsai_cli_version, python_version, platform)
         return user_info
 
-    @_handles_connection_and_timeout_error
+    def _get_headers(self):
+        return {
+            'Authorization': self._access_key,
+            'User-Agent': self._user_info,
+        }
+
+    def _try_http_request(self, http_method, url, data=None, headers=None):
+        log.debug('Sending {} request to {}'.format(http_method, url))
+
+        req_id = str(uuid4())
+        headers_out = self._get_headers()
+        headers_out.update({'RequestId': str(uuid4())})
+
+        if headers:
+            headers_out.update(headers)
+
+        try:
+            if http_method == 'GET':
+                response = self._session.get(url=url,
+                                             headers=headers_out,
+                                             timeout=self.TIMEOUT)
+            elif http_method == 'DELETE':
+                response = self._session.delete(url=url,
+                                                allow_redirects=False,
+                                                headers=headers_out,
+                                                timeout=self.TIMEOUT)
+            elif http_method == 'PUT':
+                response = self._session.put(url=url,
+                                             headers=headers_out,
+                                             json=data,
+                                             allow_redirects=False,
+                                             timeout=self.TIMEOUT)
+            elif http_method == 'POST':
+                headers_out.pop('Authorization', None)
+                response = self._session.post(url=url,
+                                              auth=(self._user_name,
+                                                    self._access_key),
+                                              headers=headers_out,
+                                              json=data,
+                                              allow_redirects=False,
+                                              timeout=self.TIMEOUT)
+            elif http_method == 'POST_RAW':
+                response = self._session.post(url=url,
+                                              headers=headers_out,
+                                              data=data,
+                                              allow_redirects=False,
+                                              timeout=self.TIMEOUT)
+            elif http_method == 'PUT_RAW':
+                response = self._session.put(url=url,
+                                             headers=headers_out,
+                                             data=data,
+                                             allow_redirects=False,
+                                             timeout=self.TIMEOUT)
+            elif http_method == 'GET_MULTIPART':
+                headers_out.update({
+                    'Accept': 'multipart/mixed',
+                    'Accept-Encoding': 'base64',
+                })
+                response = self._session.get(url=url,
+                                             headers=headers_out,
+                                             timeout=self.TIMEOUT)
+            else:
+                raise UsageError('UNSUPPORTED HTTP REQUEST METHOD')
+        except requests.exceptions.ConnectionError:
+            self._skip_aria_writer_close = True
+            raise BrainServerError(
+                'Connection Error. Unable to connecto to domain: {}. ' \
+                'Request ID: {}'.format(url, req_id))
+        except requests.exceptions.Timeout:
+            self._skip_aria_writer_close = True
+            raise BrainServerError(
+                'Request to {} timed out. Current timeout is {} seconds. ' \
+                'Use the --timeout/-t option to adjust the ' \
+                'timeout. Request ID: {}'.format(url, self.TIMEOUT, req_id))
+
+        try:
+            if http_method == 'GET_MULTIPART':
+                return self._handle_get_multipart_response(response)
+            else:
+                response.raise_for_status()
+                self._raise_on_redirect(response)
+                log.debug('{} {} results:\n{}'.format(
+                    http_method, url, response.text))
+                return _dict(response, req_id)
+        except requests.exceptions.HTTPError as e:
+            _handle_and_raise(response, e, req_id)
+
+    def _http_request(self, http_method, url, data=None, headers=None):
+        """
+        Wrapper for _try_http_request(), will switch to AAD authentication
+        and retry if first attempt fails due to deprecated Bonsai credentials.
+        """
+        try:
+            return self._try_http_request(http_method, url, data, headers)
+        except BrainServerError as err:
+            aad_error = 'Bonsai credentials are depricated. Please login ' \
+                        'with Azure Active Directory Credentials'
+            if aad_error.lower() in str(err).lower():
+                print(aad_error)
+                aad_client = AADClient(self._api_url)
+                self._access_key = aad_client.get_access_token()
+                return self._try_http_request(http_method, url, data, headers)
+            else:
+                raise err
+
+    @staticmethod
+    def _handle_get_multipart_response(response):
+        response.raise_for_status()
+        # combine response's headers/response so its parsable together
+        header_list = ["{}: {}".format(key, response.headers[key])
+                        for key in response.headers]
+        header_string = "\r\n".join(header_list)
+        message = "\r\n\r\n".join([header_string, response.text])
+
+        # email is kind of a misnomer for the package,
+        # it includes a lot of utilities and we're using
+        # it here to parse the multipart response,
+        # which the requests lib doesn't help with very much
+        parsed_message = email.message_from_string(message)
+
+        # create a filename/data dictionary
+        response = {}
+        for part in parsed_message.walk():
+            # make sure this part is a file
+            file_header = part.get_filename(failobj=None)
+            if file_header:
+                filename = unquote(file_header)
+                response[filename] = part.get_payload(decode=True)
+
+        return response
+
     def _post(self, url, data=None):
         """
         Issues a POST request.
@@ -166,22 +297,8 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as a
                      dictionary. Defaults to None.
         """
-        log.debug('POST to {} with data {}...'.format(url, str(data)))
-        response = self._session.post(url=url,
-                                      auth=(self._user_name, self._access_key),
-                                      headers={'User-Agent': self._user_info},
-                                      json=data,
-                                      allow_redirects=False,
-                                      timeout=self.TIMEOUT)
-        try:
-            response.raise_for_status()
-            self._raise_on_redirect(response)
-            log.debug('POST {} results:\n{}'.format(url, response.text))
-            return _dict(response)
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
+        return self._http_request('POST', url=url, data=data)
 
-    @_handles_connection_and_timeout_error
     def _post_raw_data(self, url, data=None, headers=None):
         """
         Issues a POST request without encoding data argument.
@@ -189,27 +306,8 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as raw data
                      to be used as the body.
         """
-        log.debug('POST raw data to {} ...'.format(url))
-        headers_out = {'Authorization': self._access_key,
-                       'User-Agent': self._user_info}
-        if headers:
-            headers_out.update(headers)
+        return self._http_request('POST_RAW', url=url, data=data, headers=headers)
 
-        response = self._session.post(url=url,
-                                      headers=headers_out,
-                                      data=data,
-                                      allow_redirects=False,
-                                      timeout=self.TIMEOUT)
-
-        try:
-            response.raise_for_status()
-            self._raise_on_redirect(response)
-            log.debug('POST {} results:\n{}'.format(url, response.text))
-            return _dict(response)
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
-
-    @_handles_connection_and_timeout_error
     def _put_raw_data(self, url, data=None, headers=None):
         """
         Issues a POST request without encoding data argument.
@@ -217,27 +315,8 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as raw data
                      to be used as the body.
         """
-        log.debug('PUT raw data to {} ...'.format(url))
-        headers_out = {'Authorization': self._access_key,
-                       'User-Agent': self._user_info}
-        if headers:
-            headers_out.update(headers)
+        return self._http_request('PUT_RAW', url=url, data=data, headers=headers)
 
-        response = self._session.put(url=url,
-                                     headers=headers_out,
-                                     data=data,
-                                     allow_redirects=False,
-                                     timeout=self.TIMEOUT)
-
-        try:
-            response.raise_for_status()
-            self._raise_on_redirect(response)
-            log.debug('PUT {} results:\n{}'.format(url, response.text))
-            return _dict(response)
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
-
-    @_handles_connection_and_timeout_error
     def _put(self, url, data=None):
         """
         Issues a PUT request.
@@ -245,107 +324,29 @@ class BonsaiAPI(object):
         :param data: Any additional data to bundle with the POST, as a
                      dictionary. Defaults to None.
         """
-        log.debug('PUT to {} with data {}...'.format(url, str(data)))
-        response = self._session.put(url=url,
-                                     headers={
-                                         'Authorization': self._access_key,
-                                         'User-Agent': self._user_info},
-                                     json=data,
-                                     allow_redirects=False,
-                                     timeout=self.TIMEOUT)
-        try:
-            response.raise_for_status()
-            self._raise_on_redirect(response)
-            log.debug('PUT {} results:\n{}'.format(url, response.text))
-            return _dict(response)
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
+        return self._http_request('PUT', url, data=data)
 
-    @_handles_connection_and_timeout_error
     def _get(self, url):
         """
         Issues a GET request.
         :param url: The URL being GET from.
         """
-        log.debug('GET from {}...'.format(url))
-        response = self._session.get(url=url,
-                                     headers={
-                                         'Authorization': self._access_key,
-                                         'User-Agent': self._user_info},
-                                     timeout=self.TIMEOUT)
-        try:
-            response.raise_for_status()
-            log.debug('GET {} results:\n{}'.format(url, response.text))
-            return _dict(response)
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
+        return self._http_request('GET', url)
 
-    @_handles_connection_and_timeout_error
     def _get_multipart(self, url):
         """
         Issues a GET request for a multipart/mixed response
         and returns a dictionary of filename/data from the response.
         :param url: The URL being GET from.
         """
-        log.debug('GET from {}...'.format(url))
-        headers = {
-            'Authorization': self._access_key,
-            "Accept": "multipart/mixed",
-            'Accept-Encoding': 'base64',
-            'User-Agent': self._user_info
-        }
-        response = self._session.get(url=url,
-                                     headers=headers,
-                                     timeout=self.TIMEOUT)
-        try:
-            response.raise_for_status()
-            log.debug('GET {} results:\n{}'.format(url, response.text))
+        return self._http_request('GET_MULTIPART', url=url)
 
-            # combine response's headers/response so its parsable together
-            header_list = ["{}: {}".format(key, response.headers[key])
-                           for key in response.headers]
-            header_string = "\r\n".join(header_list)
-            message = "\r\n\r\n".join([header_string, response.text])
-
-            # email is kind of a misnomer for the package,
-            # it includes a lot of utilities and we're using
-            # it here to parse the multipart response,
-            # which the requests lib doesn't help with very much
-            parsed_message = email.message_from_string(message)
-
-            # create a filename/data dictionary
-            response = {}
-            for part in parsed_message.walk():
-                # make sure this part is a file
-                file_header = part.get_filename(failobj=None)
-                if file_header:
-                    filename = unquote(file_header)
-                    response[filename] = part.get_payload(decode=True)
-
-            return response
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
-
-    @_handles_connection_and_timeout_error
     def _delete(self, url):
         """
         Issues a DELETE request.
         :param url: The URL to DELETE.
         """
-        log.debug('DELETE {}...'.format(url))
-        response = self._session.delete(url=url,
-                                        headers={
-                                            'Authorization': self._access_key,
-                                            'User-Agent': self._user_info},
-                                        allow_redirects=False,
-                                        timeout=self.TIMEOUT)
-        try:
-            response.raise_for_status()
-            self._raise_on_redirect(response)
-            log.debug('DELETE {} results:\n{}'.format(url, response.text))
-            return _dict(response)
-        except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
+        return self._http_request('DELETE', url)
 
     def _compose_multipart(self, json_dict, filesdata):
         """ Composes multipart/mixed request for create/edit brain.
@@ -589,7 +590,6 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
         return self._get_multipart(url=url)
 
-    @_handles_connection_and_timeout_error
     def _get_info(self, brain_name):
         url_path = _GET_INFO_URL_PATH_TEMPLATE.format(
             username=self._user_name,
@@ -598,12 +598,25 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
 
         log.debug('GET from {}...'.format(url))
-        response = self._session.get(url=url,
-                                     headers={
-                                         'Authorization': self._access_key,
-                                         'User-Agent': self._user_info},
-                                     timeout=self.TIMEOUT)
-        return response
+
+        headers = self._get_headers()
+        req_id = str(uuid4())
+        headers.update({'RequestID': req_id})
+
+        try:
+            response = self._session.get(url=url,
+                                         headers=headers,
+                                         timeout=self.TIMEOUT)
+        except requests.exceptions.ConnectionError as err:
+            raise BrainServerError(
+                'Connection Error. Unable to connecto to domain: {}. ' \
+                'Request ID: {}'.format(url, req_id))
+        except requests.exceptions.Timeout as err:
+            raise BrainServerError(
+                'Request to {} timed out. Current timeout is {} seconds. ' \
+                'Use the --timeout/-t option to adjust the ' \
+                'timeout. Request ID: {}'.format(url, self.TIMEOUT, req_id))
+        return response, req_id
 
     def get_project(self, category, name):
         """
@@ -632,14 +645,14 @@ class BonsaiAPI(object):
         >>> bonsai_api.get_brain_exists('cartpole')
         :param brain_name: The name of the BRAIN
         """
-        response = self._get_info(brain_name)
+        response, req_id = self._get_info(brain_name)
         log.debug('status code: {}'.format(response.status_code))
         if response.status_code == 404:
             return False
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            _handle_and_raise(response, e)
+            _handle_and_raise(response, e, req_id)
 
         return True
 
@@ -688,6 +701,7 @@ class BonsaiAPI(object):
             brain=brain_name
         )
         url = urljoin(self._api_url, url_path)
+        self._aria_writer.track(StartTrainingBrain(is_resume=False))
         return self._put(url=url, data=data)
 
     def get_brain_status(self, brain_name):
@@ -743,6 +757,9 @@ class BonsaiAPI(object):
             version=brain_version
         )
         url = urljoin(self._api_url, url_path)
+        self._aria_writer.track(
+            StartTrainingBrain(is_resume=True, brain_version=brain_version)
+        )
         return self._put(url=url, data=data)
 
 

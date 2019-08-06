@@ -2,6 +2,7 @@
 This file contaisn unit tests for the bonsai api
 """
 import os
+from uuid import uuid4
 from unittest import TestCase
 
 # python 3.3+ includes mock in the unittest module
@@ -24,9 +25,42 @@ class TestBonsaiApi(TestCase):
     Contains all the tests for the bonsai api
     """
     def setUp(self):
-        self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/')
+        self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/',
+                                 disable_telemetry=True)
         self.timeout = self.tempapi.TIMEOUT
         self.runner = CliRunner()
+        self.req_id = str(uuid4())
+        patcher = patch('bonsai_cli.api.uuid4', 
+                        new=Mock(return_value=self.req_id))
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+    def _get_headers(self):
+        return {
+            'Authorization': 'fakekey',
+            'User-Agent': self.tempapi._user_info,
+            'RequestId': self.req_id
+        }
+
+    def __get_post_headers(self):
+        headers = self._get_headers()
+        headers.pop('Authorization', None)
+        return headers
+
+    def _get_headers_multipart_mixed(self):
+        headers = self._get_headers()
+        headers.update({
+            'Accept': 'multipart/mixed',
+            'Accept-Encoding': 'base64',
+        })
+        return headers
+    
+    @staticmethod
+    def _generate_mock_http_error_response():
+        mock_response = cast(Any, Mock())
+        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response.headers = {'SpanID': uuid4()}
+        return mock_response
 
     @patch('bonsai_cli.api.requests.Session.post')
     def testValidate(self, mock_post):
@@ -49,7 +83,7 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_once_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate')
@@ -74,7 +108,7 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate'
@@ -84,7 +118,7 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate'
@@ -97,8 +131,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response = self._generate_mock_http_error_response()
 
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
@@ -111,7 +144,7 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_once_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/validate'
@@ -129,13 +162,13 @@ class TestBonsaiApi(TestCase):
         mock_post.return_value = mock_response
 
         # Call API function we are testing
-        response_dict = self.tempapi.create_brain('fakename')
+        self.tempapi.create_brain('fakename')
 
         # Check that our api made expected calls
         mock_post.assert_called_once_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json={'name': 'fakename'},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/brains'
@@ -160,7 +193,7 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json={'name': 'foo'},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/brains'
@@ -170,7 +203,7 @@ class TestBonsaiApi(TestCase):
         mock_post.assert_called_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json={'name': 'bar'},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/brains'
@@ -186,13 +219,13 @@ class TestBonsaiApi(TestCase):
         mock_post.return_value = mock_response
 
         # Call API function we are testing
-        response_dict = self.tempapi.create_brain('fakename', None, 'projtype')
+        self.tempapi.create_brain('fakename', None, 'projtype')
 
         # Check that our api made expected calls
         mock_post.assert_called_once_with(
             allow_redirects=False,
             auth=('fakeuser', 'fakekey'),
-            headers={'User-Agent': self.tempapi._user_info},
+            headers=self.__get_post_headers(),
             json={'name': 'fakename',
                   'project_type': 'projtype'},
             timeout=self.timeout,
@@ -215,7 +248,7 @@ class TestBonsaiApi(TestCase):
 
         # Call API function we are testing
         pf = ProjectFile()
-        response_dict = self.tempapi.create_brain('fakename', pf, None)
+        self.tempapi.create_brain('fakename', pf, None)
 
         # Check that our api made expected calls
         self.assertEqual(1, mock_post.call_count)
@@ -228,8 +261,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response = self._generate_mock_http_error_response()
         # Assign mock response to our patched function
         mock_post.return_value = mock_response
 
@@ -265,8 +297,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser',
             timeout=self.timeout)
         self.assertEqual(1, mock_get.call_count)
@@ -288,16 +319,14 @@ class TestBonsaiApi(TestCase):
         self.tempapi._api_url = 'https://someurl//'
         self.tempapi.list_brains()
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser',
             timeout=self.timeout
         )
         self.tempapi._api_url = 'https://someurl'
         self.tempapi.list_brains()
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser',
             timeout=self.timeout
         )
@@ -309,8 +338,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response = self._generate_mock_http_error_response()
 
         # Assign mock response to our patched function
         mock_get.return_value = mock_response
@@ -321,8 +349,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser',
             timeout=self.timeout)
         self.assertEqual(1, mock_get.call_count)
@@ -347,8 +374,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser',
             timeout=self.timeout)
         self.assertEqual(1, mock_get.call_count)
@@ -379,8 +405,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain/status',
             timeout=self.timeout
         )
@@ -403,16 +428,14 @@ class TestBonsaiApi(TestCase):
         self.tempapi._api_url = 'https://someurl//'
         self.tempapi.get_brain_status('fakebrain')
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain/status',
             timeout=self.timeout
         )
         self.tempapi._api_url = 'https://someurl'
         self.tempapi.get_brain_status('fakebrain')
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain/status',
             timeout=self.timeout
         )
@@ -445,8 +468,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain/sims',
             timeout=self.timeout
         )
@@ -469,16 +491,14 @@ class TestBonsaiApi(TestCase):
         self.tempapi._api_url = 'https://someurl//'
         self.tempapi.list_simulators('fakebrain')
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain/sims',
             timeout=self.timeout
         )
         self.tempapi._api_url = 'https://someurl'
         self.tempapi.list_simulators('fakebrain')
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain/sims',
             timeout=self.timeout
         )
@@ -502,10 +522,7 @@ class TestBonsaiApi(TestCase):
 
         # Check that our api made expected calls
         mock_get.assert_called_once_with(
-            headers={'Authorization': 'fakekey',
-                     'Accept': 'multipart/mixed',
-                     'Accept-Encoding': 'base64',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers_multipart_mixed(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
@@ -530,20 +547,14 @@ class TestBonsaiApi(TestCase):
         self.tempapi._api_url = 'https://someurl//'
         self.tempapi.get_brain_files('fakebrain')
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'Accept': 'multipart/mixed',
-                     'Accept-Encoding': 'base64',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers_multipart_mixed(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
         self.tempapi._api_url = 'https://someurl'
         self.tempapi.get_brain_files('fakebrain')
         mock_get.assert_called_with(
-            headers={'Authorization': 'fakekey',
-                     'Accept': 'multipart/mixed',
-                     'Accept-Encoding': 'base64',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers_multipart_mixed(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
@@ -572,8 +583,7 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_delete.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
@@ -597,8 +607,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi.delete_brain('fakebrain')
         mock_delete.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
@@ -606,8 +615,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi.delete_brain('fakebrain')
         mock_delete.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
@@ -619,8 +627,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response = self._generate_mock_http_error_response()
 
         # Assign mock response to our patched function
         mock_delete.return_value = mock_response
@@ -632,8 +639,7 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_delete.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             url='https://someurl/v1/fakeuser/fakebrain',
             timeout=self.timeout
         )
@@ -653,13 +659,12 @@ class TestBonsaiApi(TestCase):
         mock_put.return_value = mock_response
 
         # Call API function we are testing
-        response = self.tempapi.start_training_brain('fakebrain')
+        self.tempapi.start_training_brain('fakebrain')
 
         # Check that our api made expected calls
         mock_put.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json={},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/train'
@@ -683,8 +688,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi.start_training_brain('fakebrain')
         mock_put.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json={},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/train'
@@ -693,8 +697,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi.start_training_brain('fakebrain')
         mock_put.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json={},
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/train'
@@ -713,13 +716,12 @@ class TestBonsaiApi(TestCase):
         mock_put.return_value = mock_response
 
         # Call API function we are testing
-        response = self.tempapi.stop_training_brain('fakebrain')
+        self.tempapi.stop_training_brain('fakebrain')
 
         # Check that our api made expected calls
         mock_put.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/stop'
@@ -743,8 +745,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi.stop_training_brain('fakebrain')
         mock_put.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/stop'
@@ -753,8 +754,7 @@ class TestBonsaiApi(TestCase):
         self.tempapi.stop_training_brain('fakebrain')
         mock_put.assert_called_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/stop'
@@ -767,8 +767,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response = self._generate_mock_http_error_response()
 
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
@@ -780,8 +779,7 @@ class TestBonsaiApi(TestCase):
         # Check that our api made expected calls
         mock_put.assert_called_once_with(
             allow_redirects=False,
-            headers={'Authorization': 'fakekey',
-                     'User-Agent': self.tempapi._user_info},
+            headers=self._get_headers(),
             json=None,
             timeout=self.timeout,
             url='https://someurl/v1/fakeuser/fakebrain/stop'
@@ -841,8 +839,7 @@ class TestBonsaiApi(TestCase):
         """
 
         # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = HTTPError()
+        mock_response = self._generate_mock_http_error_response()
         # Assign mock response to our patched function
         mock_put.return_value = mock_response
 
@@ -860,17 +857,13 @@ class TestBonsaiApi(TestCase):
         Testing that connection errors are handled
         """
 
-        # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = ConnectionError()
-
         # Assign mock response to our patched function
-        mock_put.return_value = mock_response
+        mock_put.side_effect = ConnectionError()
 
         # Call API function we are testing
         pf = ProjectFile()
         with self.assertRaises(BrainServerError):
-            response = self.tempapi.edit_brain('fakebrain', pf)
+            self.tempapi.edit_brain('fakebrain', pf)
 
         # Following assert statements commented out due to being broken
         # A Change in the backend is causing it to be called twice on master
@@ -885,6 +878,7 @@ class TestBonsaiApi(TestCase):
 
         # Construct mock response object and relevant function behavior
         mock_response = cast(Any, Mock())
+        mock_response.headers = {'SpanID': uuid4()}
         mock_response.status_code = 301
 
         # Assign mock response to our patched function
@@ -975,8 +969,9 @@ class TestBonsaiApi(TestCase):
     def test_json_decode_error(self):
         mock_response = cast(Any, Mock())
         mock_response.json.side_effect = ValueError()
+        mock_response.headers = {'SpanID': uuid4()}
         with self.assertRaises(BrainServerError):
-            _dict(mock_response)
+            _dict(mock_response, '1234')
 
     @patch('bonsai_cli.api.requests.Session.post')
     @patch('bonsai_cli.api.requests.Session.delete')
@@ -987,15 +982,11 @@ class TestBonsaiApi(TestCase):
         Test that a timeout error gets wrapped as a BrainServerError
         """
 
-        # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-        mock_response.raise_for_status.side_effect = requests.exceptions.Timeout()
-
         # Assign mock response to our patched function
-        mock_put.return_value = mock_response
-        mock_get.return_value = mock_response
-        mock_delete.return_value = mock_response
-        mock_post.return_value = mock_response
+        mock_put.side_effect = requests.exceptions.Timeout
+        mock_get.side_effect = requests.exceptions.Timeout
+        mock_delete.side_effect = requests.exceptions.Timeout
+        mock_post.side_effect = requests.exceptions.Timeout
 
         # Call API functions we are testing
         with self.assertRaises(BrainServerError):

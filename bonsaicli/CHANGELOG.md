@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.37
+- #11673: Added RequestId header to all requests
+- #11815  Aria telemetry
+- #11926: Added python >=3.5 as a requirement to install the cli
+- #12116: Move telemetry blacklist logic into AriaWriter class
+- #12094: Add -a/--aad flag to use AAD authentication
+- #12130: Skip Aria Writer teardown due to deadlock in special cases
+
 ## 0.8.36
 - Pyright bugs
 

@@ -1,12 +1,13 @@
 """
 This file contains unit tests for bonsai command line.
 """
+
 import os
 import subprocess
-from unittest import TestCase
-from json import loads, dump
-from shutil import copyfile
+
 from contextlib import contextmanager
+from json import loads, dump
+from unittest import TestCase
 
 # python 3.3+ includes mock in the unittest module
 try:
@@ -26,7 +27,6 @@ from bonsai_cli.bonsai import (
     _websocket_test)
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
-from bonsai_cli.utils import get_pypi_version
 from typing import Any, cast
 
 SUCCESS_EXIT_CODE = 0
@@ -52,6 +52,7 @@ def _add_config():
     URL = 'http://testing'
 
     config = Config()
+    config.disable_telemetry = True
     config._update(profile=PROFILE, url=URL,
                     accesskey=ACCESS_KEY, username=USERNAME)
 
@@ -1040,7 +1041,6 @@ class TestMockedBrainCommand(TestCase):
                         "bonsai_brain.bproj"
                     ],
                     "ink_compile": {
-                        "compiler_version": "1.8.52",
                         "errors": [],
                         "success": "true",
                         "warnings": []

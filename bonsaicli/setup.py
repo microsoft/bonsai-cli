@@ -27,12 +27,13 @@ setup(
         'requests>=2.11',
         'tabulate>=0.7.5',
         'websocket-client>=0.40.0',
-        'bonsai-ai>=2.0.16',
+        'bonsai-ai>2.0.20',
     ],
     packages=find_packages(),
+    python_requires='>=3.5',
     entry_points={
         'console_scripts': [
             'bonsai=bonsai_cli.bonsai:main',
         ],
     }
-    )
+)
