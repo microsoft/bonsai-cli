@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+- #12367: Configure should default to AAD behavior and not accept username
+- #12344: Configure with AAD should auto-populate profile workspace
+- #12345: Fix for create to switch to AAD after receiving BonsaiAuthDeprecated
+- #12346: Commands should switch to AAD after receiving BonsaiAuthDeprecated or InvalidUseOfAccessKey
+- #12348: Add bonsai logout command to clear AAD cache
+- #12230: Fix typo in Connection Error message
+
 ## 0.8.37
 - #11673: Added RequestId header to all requests
 - #11815  Aria telemetry

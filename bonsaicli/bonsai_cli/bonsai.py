@@ -174,17 +174,13 @@ def brain():
 
 
 @click.command()
-@click.option('--username', '-u', help='Provide username.')
 @click.option('--access-key', '--accesskey', '-a', 'access_key', help='Provide an access key.')
 @click.option('--show', '-s', is_flag=True,
               help='Prints active profile information.')
 @click.pass_context
-def configure(ctx, username, access_key, show):
+def configure(ctx, access_key, show):
     """Authenticate with the BRAIN Server."""
-    bonsai_config = Config(control_plane_auth=True, use_aad=USE_AAD_AUTH)
-
-    if not username:
-        username = click.prompt("Username")
+    bonsai_config = Config(control_plane_auth=True, use_aad=True)
 
     if not access_key:
         if (bonsai_config.url == 'https://api.bons.ai' or
@@ -193,29 +189,21 @@ def configure(ctx, username, access_key, show):
         else:
             key_url = bonsai_config.url + "/accounts/settings/key"
         access_key_message = ("You can get this access key from "
-                              "{}").format(key_url)
+                            "{}").format(key_url)
         click.echo(access_key_message)
         access_key = click.prompt(
             "Access Key (typing will be hidden)", hide_input=True)
 
-    click.echo("Validating access key...")
-    api = BonsaiAPI(access_key=access_key,
-                    user_name=username,
-                    api_url=bonsai_config.url,
-                    disable_telemetry=bonsai_config.disable_telemetry)
-    content = None
-
-    try:
-        content = api.validate()
-    except BrainServerError as e:
-        raise_as_click_exception(e)
+    workspace = bonsai_config._aad_client.get_workspace()
     use_color = 'true' if bonsai_config.use_color else 'false'
-    bonsai_config._update(accesskey=access_key,
-                          username=username,
-                          url=bonsai_config.url,
-                          use_color=use_color)
+    args = {'username': workspace,
+            'accesskey': access_key,
+            'url': bonsai_config.url,
+            'use_color': use_color}
 
-    click.echo("Success!")
+    bonsai_config._update(**args)
+
+    click.echo("Success! Configured against {}.".format(bonsai_config.url))
 
     if show:
         print_profile_information(bonsai_config)
@@ -921,6 +909,27 @@ def diagnose():
     click_echo('Success all tests passed!', fg='green')
 
 
+@click.command("logout")
+def logout():
+    """
+    Delete the aad cache file if it exists.
+    """
+    cache_file = None
+    if 'HOME' in os.environ:
+        cache_file = os.path.join(os.environ['HOME'], '.aadcache')
+    else:
+        cache_file = os.path.join(os.getcwd(), '.aadcache')
+    if os.path.exists(cache_file):
+        try:
+            os.remove(cache_file)
+            print("Successfully logged out.")
+        except Exception as e:
+            raise_as_click_exception(e,
+                    'Could not remove cache file {}'.format(cache_file))
+    else:
+        print('Already logged out.')
+
+
 def _check_beta_status():
     click_echo('-' * 70)
     click_echo('Checking status of https://beta.bons.ai.', fg='yellow')
@@ -1005,6 +1014,7 @@ cli.add_command(sims)
 cli.add_command(switch)
 cli.add_command(bonsai_help)
 cli.add_command(diagnose)
+cli.add_command(logout)
 # T1666 - break out the actions of brain_create_local
 # cli.add_command(brain)
 

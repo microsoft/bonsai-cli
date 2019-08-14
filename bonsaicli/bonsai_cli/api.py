@@ -55,8 +55,9 @@ def _handle_and_raise(response, e, request_id):
     :param e: The error raised by the requests call.
     """
     try:
-        message = 'Request failed with error message:\n{}'.format(
-            response.json()["error"])
+        message = 'Request failed with error code "{}", error message:\n{}'.format(
+            response.json()["error"]["code"],
+            response.json()["error"]["message"])
     except:
         message = 'Request failed.'
 
@@ -225,7 +226,7 @@ class BonsaiAPI(object):
         except requests.exceptions.ConnectionError:
             self._skip_aria_writer_close = True
             raise BrainServerError(
-                'Connection Error. Unable to connecto to domain: {}. ' \
+                'Connection Error. Unable to connect to domain: {}. ' \
                 'Request ID: {}'.format(url, req_id))
         except requests.exceptions.Timeout:
             self._skip_aria_writer_close = True
@@ -254,12 +255,18 @@ class BonsaiAPI(object):
         try:
             return self._try_http_request(http_method, url, data, headers)
         except BrainServerError as err:
-            aad_error = 'Bonsai credentials are depricated. Please login ' \
-                        'with Azure Active Directory Credentials'
-            if aad_error.lower() in str(err).lower():
-                print(aad_error)
+            # check error codes and switch to AAD auth if needed
+            if ('BonsaiAuthDeprecated' in str(err) or
+                'InvalidUseOfAccessKey' in str(err)):
                 aad_client = AADClient(self._api_url)
                 self._access_key = aad_client.get_access_token()
+
+                # replace username with workspace in url, then retry request
+                workspace = aad_client.get_workspace()
+                url = url.replace(self._user_name, workspace)
+
+                # update username to workspace for any future requests
+                self._user_name = workspace
                 return self._try_http_request(http_method, url, data, headers)
             else:
                 raise err
@@ -607,9 +614,29 @@ class BonsaiAPI(object):
             response = self._session.get(url=url,
                                          headers=headers,
                                          timeout=self.TIMEOUT)
+            if "BonsaiAuthDeprecated" in response.text:
+                aad_client = AADClient(self._api_url)
+                self._access_key = aad_client.get_access_token()
+
+                # Needed for when a user that is not logged in tries to create
+                # a brain. The first call to check if brain already exists
+                # should write the AAD cache, so that the following call to
+                # create the brain doesn't ask for login again.
+                aad_client.cache.write_cache_to_file()
+
+                # replace username with workspace in url, then retry request
+                workspace = aad_client.get_workspace()
+                url = url.replace(self._user_name, workspace)
+
+                # update username to workspace for any future requests
+                self._user_name = workspace
+                headers = self._get_headers()
+                response = self._session.get(url=url,
+                                             headers=headers,
+                                             timeout=self.TIMEOUT)
         except requests.exceptions.ConnectionError as err:
             raise BrainServerError(
-                'Connection Error. Unable to connecto to domain: {}. ' \
+                'Connection Error. Unable to connect to domain: {}. ' \
                 'Request ID: {}'.format(url, req_id))
         except requests.exceptions.Timeout as err:
             raise BrainServerError(
