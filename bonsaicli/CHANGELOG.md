@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.1
+- #12454: Correct URL paths printed in `bonsai configure`
+
 ## 0.9.0
 - #12367: Configure should default to AAD behavior and not accept username
 - #12344: Configure with AAD should auto-populate profile workspace

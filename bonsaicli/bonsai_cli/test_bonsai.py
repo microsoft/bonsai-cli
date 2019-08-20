@@ -7,7 +7,6 @@ import subprocess
 
 from contextlib import contextmanager
 from json import loads, dump
-import unittest
 from unittest import TestCase
 
 # python 3.3+ includes mock in the unittest module
@@ -21,6 +20,7 @@ from click import ClickException
 from click.testing import CliRunner
 
 from bonsai_ai import Config
+from bonsai_ai.aad import AADClient
 from bonsai_cli import __version__
 from bonsai_cli.api import BrainServerError, BonsaiAPI
 from bonsai_cli.bonsai import (
@@ -37,6 +37,8 @@ USERNAME = 'admin'
 
 BONSAI_BACKUP = './bonsai.bak'
 
+BEARER_TOKEN = 'Bearer 1234567890'
+WORKSPACE = 'xxworkspacexx'
 
 def _print_result(result):
     """Debugging method to print the output returned from click."""
@@ -121,6 +123,9 @@ class TestMockedBrainCommand(TestCase):
         self.addCleanup(version_check_patcher.stop)
         patcher.start()
         version_check_patcher.start()
+
+        AADClient.get_access_token = Mock(return_value=BEARER_TOKEN)
+        AADClient.get_workspace = Mock(return_value=WORKSPACE)
 
     def test_brain_download(self):
         self.api.get_brain_files.return_value = {
@@ -508,16 +513,15 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue(f in payload["project_accompanying_files"],
                             "f={} project_accompanying_files field".format(f))
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure(self, validate_mock):
         with temp_filesystem(self):
             # Run `bonsai configure`
             result = self.runner.invoke(
-                cli, ['configure'], input=USERNAME + '\n' + ACCESS_KEY)
+                cli, ['configure'], input=ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
-                'https://beta.bons.ai/accounts/settings/key' in result.output)
+                'https://beta.bons.ai/accounts/settings' in result.output)
 
             # Check ~/.bonsai
             path = os.path.expanduser('~/.bonsai')
@@ -527,9 +531,8 @@ class TestMockedBrainCommand(TestCase):
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = https://api.bons.ai" in lines)
-                self.assertTrue("username = {}".format(USERNAME) in lines)
+                self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure_key_option(self, validate_mock):
         with temp_filesystem(self):
@@ -538,7 +541,7 @@ class TestMockedBrainCommand(TestCase):
                 cli, ['switch', '--url', 'FOO', 'FIZZ'])
             # Run `bonsai configure --key <some_key>`
             result = self.runner.invoke(
-                cli, ['configure', '--access-key', ACCESS_KEY], input=USERNAME)
+                cli, ['configure', '--access-key', ACCESS_KEY])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             # Check ~/.bonsai
             path = os.path.expanduser('~/.bonsai')
@@ -548,9 +551,8 @@ class TestMockedBrainCommand(TestCase):
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
-                self.assertTrue("username = {}".format(USERNAME) in lines)
+                self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure_username_and_key_option(self, validate_mock):
         with temp_filesystem(self):
@@ -560,8 +562,6 @@ class TestMockedBrainCommand(TestCase):
             # Run `bonsai configure --key <some_key>`
             cli_args = [
                 'configure',
-                '--username',
-                USERNAME,
                 '--access-key',
                 ACCESS_KEY
             ]
@@ -575,9 +575,8 @@ class TestMockedBrainCommand(TestCase):
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
-                self.assertTrue("username = {}".format(USERNAME) in lines)
+                self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_configure_uses_correct_use_color_value(self, validate_mock):
         """
@@ -591,8 +590,6 @@ class TestMockedBrainCommand(TestCase):
             # Run `bonsai configure --key <some_key>`
             cli_args = [
                 'configure',
-                '--username',
-                USERNAME,
                 '--access-key',
                 ACCESS_KEY
             ]
@@ -606,7 +603,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
-                self.assertTrue("username = {}".format(USERNAME) in lines)
+                self.assertTrue("username = {}".format(WORKSPACE) in lines)
                 self.assertTrue("use_color = true" in lines)
 
             # Check that use_color changes to false
@@ -625,7 +622,6 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
                 self.assertTrue("use_color = false" in lines)
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_color_options(self, validate_mock):
         """ Tests that `--enable-color/--disable-color` work as intended """
@@ -635,10 +631,10 @@ class TestMockedBrainCommand(TestCase):
 
             # Run `bonsai configure`
             result = self.runner.invoke(
-                cli, ['configure'], input=USERNAME + '\n' + ACCESS_KEY)
+                cli, ['configure'], input=ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
-                'FOO/accounts/settings/key' in result.output)
+                'https://web-master.azdev.bons.ai/accounts/settings' in result.output)
 
             # Check ~/.bonsai
             path = os.path.expanduser('~/.bonsai')
@@ -647,7 +643,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
-                self.assertTrue("username = {}".format(USERNAME) in lines)
+                self.assertTrue("username = {}".format(WORKSPACE) in lines)
                 self.assertTrue("use_color = true" in lines)
 
             result = self.runner.invoke(cli, ['--disable-color'])
@@ -664,7 +660,6 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
                 self.assertTrue("use_color = true" in lines)
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_configure_show_option(self, validate_mock):
         with temp_filesystem(self):
@@ -673,7 +668,7 @@ class TestMockedBrainCommand(TestCase):
                                         ['switch', '--url', 'FOO', 'FIZZ'])
             # Run `bonsai configure --show`
             result = self.runner.invoke(cli, ['configure', '--show'],
-                                        input=USERNAME + '\n' + ACCESS_KEY)
+                                        input=ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue(
                 'FOO' in result.output)
@@ -723,7 +718,6 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue("Profile Information" in result.output)
 
-    @unittest.skip('#12366: needs AAD mock to run')
     @patch.object(BonsaiAPI, 'validate', return_value={})
     def test_bonsai_switch_prints_default_profile(self, validate_mock):
         """ Test that `bonsai switch` behaves
@@ -731,8 +725,6 @@ class TestMockedBrainCommand(TestCase):
         with temp_filesystem(self):
             cli_args = [
                 'configure',
-                '--username',
-                USERNAME,
                 '--access-key',
                 ACCESS_KEY
             ]

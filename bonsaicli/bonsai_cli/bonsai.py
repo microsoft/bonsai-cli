@@ -183,11 +183,18 @@ def configure(ctx, access_key, show):
     bonsai_config = Config(control_plane_auth=True, use_aad=True)
 
     if not access_key:
+        web_master_url = 'https://web-master.azdev.bons.ai/accounts/settings'
         if (bonsai_config.url == 'https://api.bons.ai' or
                 bonsai_config.url is None):
-            key_url = 'https://beta.bons.ai/accounts/settings/key'
+            key_url = 'https://beta.bons.ai/accounts/settings'
+        elif bonsai_config.url == 'https://staging-api.azdev.bons.ai':
+            key_url = web_master_url + '?cloud=staging'
+        elif bonsai_config.url == 'https://preprod-api.aztest.bons.ai':
+            key_url = web_master_url + '?cloud=preprod'
+        elif bonsai_config.url == 'http://localhost:5001':
+            key_url = web_master_url + '?cloud=local'
         else:
-            key_url = bonsai_config.url + "/accounts/settings/key"
+            key_url = web_master_url
         access_key_message = ("You can get this access key from "
                             "{}").format(key_url)
         click.echo(access_key_message)

@@ -22,6 +22,11 @@ def api(use_aad=False):
                            control_plane_auth=True,
                            use_aad=use_aad)
     verify_required_configuration(bonsai_config)
+
+    # Several commands call this function before instantiating a new Config
+    # object. Write the cache now to avoid requiring a second login later.
+    bonsai_config.write_aad_cache()
+
     return BonsaiAPI(access_key=bonsai_config.accesskey,
                      user_name=bonsai_config.username,
                      api_url=bonsai_config.url,

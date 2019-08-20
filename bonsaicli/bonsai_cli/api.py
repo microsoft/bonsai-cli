@@ -129,10 +129,10 @@ class BonsaiAPI(object):
         self._session = requests.Session()
         self._session.proxies = getproxies()
         self._aria_writer = AriaWriter(
-            cluster_url=api_url, 
+            cluster_url=api_url,
             disable_telemetry=disable_telemetry)
 
-        # In the event of the writer being instantiated but no tracking event 
+        # In the event of the writer being instantiated but no tracking event
         # being sent a deadlock occurs. This flag is used to skip calling the
         # code causing the deadlock
         self._skip_aria_writer_close = False
@@ -258,6 +258,10 @@ class BonsaiAPI(object):
             # check error codes and switch to AAD auth if needed
             if ('BonsaiAuthDeprecated' in str(err) or
                 'InvalidUseOfAccessKey' in str(err)):
+                log.debug('Received BonsaiAuthDeprecated or '
+                          'InvalidUseOfAccessKey from service, '
+                          'switching to AAD authentication. Full error '
+                          'text: {}'.format(str(err)))
                 aad_client = AADClient(self._api_url)
                 self._access_key = aad_client.get_access_token()
 
