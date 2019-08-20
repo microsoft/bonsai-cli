@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.2
+- #12458: Require bonsai-ai version 2.2.1 or greater
+
 ## 0.9.1
 - #12454: Correct URL paths printed in `bonsai configure`
 
