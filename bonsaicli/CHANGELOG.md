@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.3
+- IcM/141829256: CLI is writing the .aadcache file to the local directory.
+- #12492: Include function to validate AAD bearer token in `bonsai diagnose`
+- #12513: Replace pip get_installed_distributions import with safer setuptools import
+
 ## 0.9.2
 - #12458: Require bonsai-ai version 2.2.1 or greater
 

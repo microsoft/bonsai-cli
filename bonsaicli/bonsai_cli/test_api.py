@@ -63,96 +63,6 @@ class TestBonsaiApi(TestCase):
         return mock_response
 
     @patch('bonsai_cli.api.requests.Session.post')
-    def testValidate(self, mock_post):
-        """
-        Test post through external validate function
-        """
-
-        # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, cast(Any, Mock()))
-        expected_dict = {"username": "someuser"}
-        mock_response.json.return_value = expected_dict
-
-        # Assign mock response to our patched function
-        mock_post.return_value = mock_response
-
-        # Call API function we are testing
-        response_dict = self.tempapi.validate()
-
-        # Check that our api made expected calls
-        mock_post.assert_called_once_with(
-            allow_redirects=False,
-            auth=('fakeuser', 'fakekey'),
-            headers=self.__get_post_headers(),
-            json=None,
-            timeout=self.timeout,
-            url='https://someurl/v1/validate')
-        self.assertEqual(1, mock_post.call_count)
-        self.assertEqual(1, mock_response.json.call_count)
-        self.assertEqual(response_dict, expected_dict)
-
-    @patch('bonsai_cli.api.requests.Session.post')
-    def testValidateUrlJoining(self, mock_post):
-        """
-        Test that url's are joined correctly for validate
-        """
-        # Construct mock response object and relevant function behavior
-        mock_response = cast(Any, Mock())
-
-        # Assign mock response to our patched function
-        mock_post.return_value = mock_response
-
-        # Test different urls and show that they are joined correctly
-        self.tempapi._api_url = 'https://someurl//'
-        self.tempapi.validate()
-        mock_post.assert_called_with(
-            allow_redirects=False,
-            auth=('fakeuser', 'fakekey'),
-            headers=self.__get_post_headers(),
-            json=None,
-            timeout=self.timeout,
-            url='https://someurl/v1/validate'
-        )
-        self.tempapi._api_url = 'https://someurl'
-        self.tempapi.validate()
-        mock_post.assert_called_with(
-            allow_redirects=False,
-            auth=('fakeuser', 'fakekey'),
-            headers=self.__get_post_headers(),
-            json=None,
-            timeout=self.timeout,
-            url='https://someurl/v1/validate'
-        )
-
-    @patch('bonsai_cli.api.requests.Session.post')
-    def testValidateRaiseError(self, mock_post):
-        """
-        Test that post raises an HTTP error through the validate function
-        """
-
-        # Construct mock response object and relevant function behavior
-        mock_response = self._generate_mock_http_error_response()
-
-        # Assign mock response to our patched function
-        mock_post.return_value = mock_response
-
-        # Call API function we are testing
-        with self.assertRaises(BrainServerError):
-            self.tempapi.validate()
-
-        # Check that our api made expected calls
-        mock_post.assert_called_once_with(
-            allow_redirects=False,
-            auth=('fakeuser', 'fakekey'),
-            headers=self.__get_post_headers(),
-            json=None,
-            timeout=self.timeout,
-            url='https://someurl/v1/validate'
-        )
-        self.assertEqual(1, mock_post.call_count)
-        self.assertEqual(1, mock_response.raise_for_status.call_count)
-
-    @patch('bonsai_cli.api.requests.Session.post')
     def testCreateBrain(self, mock_post):
 
         # Construct mock response object and relevant function behavior
@@ -997,6 +907,3 @@ class TestBonsaiApi(TestCase):
 
         with self.assertRaises(BrainServerError):
             self.tempapi.delete_brain('fakebrain')
-
-        with self.assertRaises(BrainServerError):
-            self.tempapi.validate()

@@ -513,8 +513,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue(f in payload["project_accompanying_files"],
                             "f={} project_accompanying_files field".format(f))
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_bonsai_configure(self, validate_mock):
+    def test_bonsai_configure(self):
         with temp_filesystem(self):
             # Run `bonsai configure`
             result = self.runner.invoke(
@@ -533,8 +532,7 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("url = https://api.bons.ai" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_bonsai_configure_key_option(self, validate_mock):
+    def test_bonsai_configure_key_option(self):
         with temp_filesystem(self):
             # add a profile to .bonsai
             result = self.runner.invoke(
@@ -553,8 +551,7 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_bonsai_configure_username_and_key_option(self, validate_mock):
+    def test_bonsai_configure_username_and_key_option(self):
         with temp_filesystem(self):
             # add a profile to .bonsai
             result = self.runner.invoke(
@@ -577,8 +574,7 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_configure_uses_correct_use_color_value(self, validate_mock):
+    def test_configure_uses_correct_use_color_value(self):
         """
         Tests that the value of use_color is correct when it is changed
         and bonsai configure is run again.
@@ -622,8 +618,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
                 self.assertTrue("use_color = false" in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_color_options(self, validate_mock):
+    def test_color_options(self):
         """ Tests that `--enable-color/--disable-color` work as intended """
         with temp_filesystem(self):
             # add a profile to .bonsai
@@ -660,8 +655,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
                 self.assertTrue("use_color = true" in lines)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_bonsai_configure_show_option(self, validate_mock):
+    def test_bonsai_configure_show_option(self):
         with temp_filesystem(self):
             # add a profile to .bonsai
             result = self.runner.invoke(cli,
@@ -670,8 +664,7 @@ class TestMockedBrainCommand(TestCase):
             result = self.runner.invoke(cli, ['configure', '--show'],
                                         input=ACCESS_KEY)
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-            self.assertTrue(
-                'FOO' in result.output)
+            self.assertTrue('FOO' in result.output)
             self.assertTrue('Profile Information' in result.output)
 
     def test_bonsai_switch_new_profile(self):
@@ -718,8 +711,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
             self.assertTrue("Profile Information" in result.output)
 
-    @patch.object(BonsaiAPI, 'validate', return_value={})
-    def test_bonsai_switch_prints_default_profile(self, validate_mock):
+    def test_bonsai_switch_prints_default_profile(self):
         """ Test that `bonsai switch` behaves
             correctly with DEFAULT profile """
         with temp_filesystem(self):
@@ -1618,7 +1610,7 @@ class TestBonsaiDiagnose(TestCase):
             patch_request.return_value.status_code = 200
             _check_beta_status()
 
-    @patch('bonsai_cli.api.BonsaiAPI.validate')
+    @patch('bonsai_cli.api.BonsaiAPI.list_brains')
     def test_validate_config_error(self, patch_request):
         with temp_filesystem(self):
             patch_request.side_effect = BrainServerError()
@@ -1626,7 +1618,7 @@ class TestBonsaiDiagnose(TestCase):
             with self.assertRaises(ClickException):
                 _validate_config()
 
-    @patch('bonsai_cli.api.BonsaiAPI.validate')
+    @patch('bonsai_cli.api.BonsaiAPI.list_brains')
     def test_validate_config_success(self, patch_request):
         with temp_filesystem(self):
             patch_request.return_value = {}

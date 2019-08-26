@@ -23,7 +23,6 @@ from requests.packages.urllib3.fields import RequestField
 from requests.packages.urllib3.filepost import encode_multipart_formdata
 import websocket
 
-_VALIDATE_URL_PATH = "/v1/validate"
 _LIST_BRAINS_URL_PATH_TEMPLATE = "/v1/{username}"
 _CREATE_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/brains"
 _DELETE_BRAIN_URL_PATH_TEMPLATE = "/v1/{username}/{brain}"
@@ -427,26 +426,6 @@ class BonsaiAPI(object):
         )
         handler = LogStreamHandler(url, self._access_key)
         handler.run()
-
-    def validate(self):
-        """
-        Validates an access key. This is the only scenario in which user_name
-        in the constructor may be None. If the request fails, an exception is
-        raised. If valid, a dictionary containing the username for the access
-        key is returned.
-        >>> bonsai_api = BonsaiAPI(access_key='foo', user_name=None)
-        >>> bonsai_api.validate()
-        >>>
-        >>> {
-        >>>     "username": "bill"
-        >>> }
-        >>>
-        :return: Dictionary containing the user-name associated with the access
-                 key.
-        """
-        log.debug('Validating access key')
-        url = urljoin(self._api_url, _VALIDATE_URL_PATH)
-        return self._post(url=url)
 
     def list_brains(self):
         """

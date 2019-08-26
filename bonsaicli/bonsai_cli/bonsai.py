@@ -12,10 +12,7 @@ import sys
 import time
 import subprocess
 from json import dumps
-try:
-    from pip._internal.utils.misc import get_installed_distributions
-except ImportError:
-    from pip import get_installed_distributions
+import pkg_resources
 
 import click
 import requests
@@ -91,7 +88,7 @@ def _sysinfo(ctx, param, value):
     click.echo("\nPlatform Information\n--------------------")
     click.echo(sys.version)
     click.echo(platform.platform())
-    packages = get_installed_distributions()
+    packages = [d for d in iter(pkg_resources.working_set)]
     click.echo("\nPackage Information\n-------------------")
     click.echo(pprint.pformat(packages))
     click.echo("\nBonsai Profile Information\n--------------------------")
@@ -907,9 +904,7 @@ def diagnose():
     click_echo('-' * 70)
     check_cli_version()
     _check_beta_status()
-    # /v1/validate endpoint not supported with AAD bearer tokens
-    if not USE_AAD_AUTH:
-        _validate_config()
+    _validate_config()
     with CliRunner().isolated_filesystem():
         _download_cartpole_demo()
         _websocket_test()
@@ -922,10 +917,12 @@ def logout():
     Delete the aad cache file if it exists.
     """
     cache_file = None
-    if 'HOME' in os.environ:
-        cache_file = os.path.join(os.environ['HOME'], '.aadcache')
+    home = os.path.expanduser("~")
+    if len(home) > 0:
+        cache_file = os.path.join(home, '.aadcache')
     else:
-        cache_file = os.path.join(os.getcwd(), '.aadcache')
+        raise Exception('Unable to create ~/.aadcache file.')
+
     if os.path.exists(cache_file):
         try:
             os.remove(cache_file)
@@ -941,29 +938,31 @@ def _check_beta_status():
     click_echo('-' * 70)
     click_echo('Checking status of https://beta.bons.ai.', fg='yellow')
     try:
-        response = requests.get('https://beta.bons.ai/v1/status')
+        response = requests.get('https://beta.bons.ai/version')
     except requests.exceptions.RequestException as e:
         raise_as_click_exception(
             e,
-            'Unable to request status from https://beta.bons.ai \n' +
+            'Unable to request version from https://beta.bons.ai/version \n' +
             NETWORK_HELP_STRING)
     if response.status_code != 200:
         raise_as_click_exception(
-            'Unable to request status from https://beta.bons.ai \n' +
+            'Unable to request version from https://beta.bons.ai/version \n' +
             NETWORK_HELP_STRING)
     click_echo('Success! Beta is online.', fg='green')
     click_echo('-' * 70)
 
+
 def _validate_config():
-    click_echo('Validating Configuration.', fg='yellow')
+    click_echo('Validating Azure Active Directory login.', fg='yellow')
     try:
-        api(use_aad=USE_AAD_AUTH).validate()
+        # we don't care what is returned as long as no exception is raised
+        api(use_aad=USE_AAD_AUTH).list_brains()
     except BrainServerError:
         raise_as_click_exception(
-            'Unable to validate configuration',
+            'Unable to validate login credentials',
             'Please run \'bonsai configure\' to setup configuration.'
             '\n' + NETWORK_HELP_STRING)
-    click_echo('Success! Configuration is valid.', fg='green')
+    click_echo('Success! You are logged in.', fg='green')
     click_echo('-' * 70)
 
 
