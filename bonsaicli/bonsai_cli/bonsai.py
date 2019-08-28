@@ -192,11 +192,11 @@ def configure(ctx, access_key, show):
             key_url = web_master_url + '?cloud=local'
         else:
             key_url = web_master_url
-        access_key_message = ("You can get this access key from "
-                            "{}").format(key_url)
+        access_key_message = (
+            "Input your access key. You can get this access key from "
+            "{}").format(key_url)
         click.echo(access_key_message)
-        access_key = click.prompt(
-            "Access Key (typing will be hidden)", hide_input=True)
+        access_key = str(input("Access Key: ",))
 
     workspace = bonsai_config._aad_client.get_workspace()
     use_color = 'true' if bonsai_config.use_color else 'false'

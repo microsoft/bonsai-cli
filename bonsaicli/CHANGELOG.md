@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.4
+- #12576: Switch out click.prompt with STL input
+
 ## 0.9.3
 - IcM/141829256: CLI is writing the .aadcache file to the local directory.
 - #12492: Include function to validate AAD bearer token in `bonsai diagnose`
