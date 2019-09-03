@@ -13,13 +13,12 @@ from configparser import NoSectionError
 from json import decoder
 
 
-def api(use_aad=False):
+def api(use_aad):
     """
     Convenience function for creating and returning an API object.
     :return: An API object.
     """
     bonsai_config = Config(argv=sys.argv[0],
-                           control_plane_auth=True,
                            use_aad=use_aad)
     verify_required_configuration(bonsai_config)
 
@@ -32,6 +31,7 @@ def api(use_aad=False):
                      api_url=bonsai_config.url,
                      ws_url=bonsai_config._websocket_url(),
                      )
+
 
 def brain_fallback(brain, project):
     """
@@ -64,7 +64,7 @@ def click_echo(text, fg=None, bg=None):
      param bg: background color
     """
     try:
-        config = Config(argv=sys.argv[0], control_plane_auth=True)
+        config = Config(argv=sys.argv[0], use_aad=False)
         color = config.use_color
     except ValueError:
         color = False
@@ -246,7 +246,7 @@ def raise_as_click_exception(*args):
     one of its subclasses), or a message string followed by an Exception.
     """
     try:
-        config = Config(argv=sys.argv[0], control_plane_auth=True)
+        config = Config(argv=sys.argv[0], use_aad=False)
         color = config.use_color
     except ValueError:
         color = False

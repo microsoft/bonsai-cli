@@ -24,21 +24,20 @@ from bonsai_ai.aad import AADClient
 from bonsai_cli import __version__
 from bonsai_cli.api import BrainServerError, BonsaiAPI
 from bonsai_cli.bonsai import (
-    cli, _check_beta_status, _validate_config, _download_cartpole_demo,
-    _websocket_test)
+    cli, _check_beta_status, _download_cartpole_demo,
+    _websocket_test, _validate_config)
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
 from typing import Any, cast
 
 SUCCESS_EXIT_CODE = 0
 FAILURE_EXIT_CODE = 1
-ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
-USERNAME = 'admin'
+ACCESS_KEY = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+BEARER_TOKEN = 'Bearer 1234567890'
+WORKSPACE = 'xxworkspacexx'
 
 BONSAI_BACKUP = './bonsai.bak'
 
-BEARER_TOKEN = 'Bearer 1234567890'
-WORKSPACE = 'xxworkspacexx'
 
 def _print_result(result):
     """Debugging method to print the output returned from click."""
@@ -49,15 +48,13 @@ def _print_result(result):
 
 
 def _add_config():
-    ACCESS_KEY = '00000000-1111-2222-3333-000000000001'
-    USERNAME = 'admin'
     PROFILE = 'test'
     URL = 'http://testing'
 
-    config = Config()
+    config = Config(use_aad=True)
     config.disable_telemetry = True
     config._update(profile=PROFILE, url=URL,
-                    accesskey=ACCESS_KEY, username=USERNAME)
+                    accesskey=ACCESS_KEY, username=WORKSPACE)
 
 
 @contextmanager
@@ -90,6 +87,8 @@ class TestBrainCommand(TestCase):
 
     def setUp(self):
         self.runner = CliRunner()
+        AADClient.get_access_token = Mock(return_value=BEARER_TOKEN)
+        AADClient.get_workspace = Mock(return_value=WORKSPACE)
 
     def test_missing_access_key(self):
         with temp_filesystem(self):
@@ -335,7 +334,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test2.txt' in project_file.files)
 
             # Checks payload/filesdata that will be sent.
-            tempapi = BonsaiAPI(None, None, None)
+            tempapi = BonsaiAPI(None, None, None, disable_telemetry=True)
             (payload, filesdata) = tempapi._payload_create_brain(brain,
                                                                  project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
@@ -812,7 +811,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test2.txt' in project_file.files)
 
             # Checks payload/filesdata that will be sent.
-            tempapi = BonsaiAPI(None, None, None)
+            tempapi = BonsaiAPI(None, None, None, disable_telemetry=True)
             (payload, filesdata) = tempapi._payload_edit_brain(project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
             self.assertDictEqual(filesdata, {"test.txt": b'test content',
@@ -863,7 +862,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test2.txt' in project_file.files)
 
             # Checks payload/filesdata that will be sent.
-            tempapi = BonsaiAPI(None, None, None)
+            tempapi = BonsaiAPI(None, None, None, disable_telemetry=True)
             (payload, filesdata) = tempapi._payload_edit_brain(project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
             self.assertDictEqual(filesdata, {"test.txt": b'test content',
@@ -1589,6 +1588,8 @@ class TestBonsaiDiagnose(TestCase):
     """ Test cases for bonsai diagnose command """
     def setUp(self):
         self.runner = CliRunner()
+        AADClient.get_access_token = Mock(return_value=BEARER_TOKEN)
+        AADClient.get_workspace = Mock(return_value=WORKSPACE)
 
     @patch('requests.get')
     def test_check_beta_status_error(self, patch_request):

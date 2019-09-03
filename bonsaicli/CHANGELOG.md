@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.5
+- #12423: Remove legacy auth support in CLI
+
 ## 0.9.4
 - #12576: Switch out click.prompt with STL input
 

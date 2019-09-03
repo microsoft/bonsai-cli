@@ -48,8 +48,6 @@ settings if they are needed in future development of the cli.
 """
 CONTEXT_SETTINGS = dict(help_option_names=['--help', '-h'])
 
-""" Global flag for whether CLI should use AAD authentication """
-USE_AAD_AUTH = False
 
 def _add_or_default_brain(directory, brain_name):
     """
@@ -92,7 +90,7 @@ def _sysinfo(ctx, param, value):
     click.echo("\nPackage Information\n-------------------")
     click.echo(pprint.pformat(packages))
     click.echo("\nBonsai Profile Information\n--------------------------")
-    print_profile_information(Config(control_plane_auth=True))
+    print_profile_information(Config(use_aad=True))
     ctx.exit()
 
 
@@ -102,7 +100,7 @@ def _set_color(ctx, param, value):
         return
 
     # no need for AAD authentication if only setting color
-    config = Config(control_plane_auth=True, use_aad=False)
+    config = Config(use_aad=False)
     if value:
         config._update(use_color='true')
     else:
@@ -134,9 +132,8 @@ def _global_version_check(ctx):
               expose_value=False, is_eager=True, default=None)
 @click.option('--disable-version-check', '-dv', is_flag=True, default=False)
 @click.option('--aad', '-a', default=False, is_flag=True,
-              help='Authenticate using Azure Active Directory. NOTE: This '
-              'flag must come after the bonsai command and before any '
-              'command listed below.')
+              help='Deprecated. All commands authenticate with Azure Active '
+              'Directory by default.')
 @click.pass_context
 def cli(ctx, debug, timeout, disable_version_check, aad):
     """Command line interface for the Bonsai Artificial Intelligence Engine.
@@ -146,10 +143,10 @@ def cli(ctx, debug, timeout, disable_version_check, aad):
 
     if timeout:
         BonsaiAPI.TIMEOUT = timeout
-    
+
     if aad:
-        global USE_AAD_AUTH
-        USE_AAD_AUTH = aad
+        print('Warning: -a/--aad argument is deprecated. Azure Active '
+              'Directory authentication is used by default.')
 
     # https://click.palletsprojects.com/en/7.x/commands/#nested-handling-and-contexts
     ctx.ensure_object(dict)
@@ -177,7 +174,7 @@ def brain():
 @click.pass_context
 def configure(ctx, access_key, show):
     """Authenticate with the BRAIN Server."""
-    bonsai_config = Config(control_plane_auth=True, use_aad=True)
+    bonsai_config = Config(use_aad=True)
 
     if not access_key:
         web_master_url = 'https://web-master.azdev.bons.ai/accounts/settings'
@@ -227,8 +224,7 @@ def switch(ctx, profile, url, show, help_option):
     Change the active configuration section.\n
     For new profiles you must provide a url with the --url option.
     """
-    config = Config(argv=sys.argv[0], control_plane_auth=True,
-                    use_aad=USE_AAD_AUTH, fetch_workspace=False)
+    config = Config(argv=sys.argv[0], use_aad=False)
     # `bonsai switch` and `bonsai switch -h/--help have the same output
     if (not profile and not show) or help_option:
         click.echo(ctx.get_help())
@@ -274,7 +270,7 @@ def sims():
 def brain_list(ctx, json):
     """Lists BRAINs owned by current user."""
     try:
-        content = api(use_aad=USE_AAD_AUTH).list_brains()
+        content = api(use_aad=True).list_brains()
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -311,11 +307,12 @@ def brain_list(ctx, json):
             click.echo('The current user has not created any brains.')
         _global_version_check(ctx)
 
+
 def brain_create_server(brain_name, project_file=None,
                         project_type=None, json=None):
     brain_exists = None
     try:
-        brain_exists = api(use_aad=USE_AAD_AUTH).get_brain_exists(brain_name)
+        brain_exists = api(use_aad=True).get_brain_exists(brain_name)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -328,15 +325,15 @@ def brain_create_server(brain_name, project_file=None,
     else:
         try:
             if project_type:
-                response = api(use_aad=USE_AAD_AUTH).create_brain(brain_name,
+                response = api(use_aad=True).create_brain(brain_name,
                                               project_type=project_type)
             elif project_file:
-                response = api(use_aad=USE_AAD_AUTH).create_brain(brain_name,
+                response = api(use_aad=True).create_brain(brain_name,
                                               project_file=project_file)
             else:
                 # TODO: Dead code that is never reached in the logic
                 # TODO: Leaving it as it is part of the function signature
-                response = api(use_aad=USE_AAD_AUTH).create_brain(brain_name)
+                response = api(use_aad=True).create_brain(brain_name)
         except BrainServerError as e:
             raise_as_click_exception(e)
 
@@ -444,7 +441,7 @@ def brain_delete(ctx, brain_name):
     Deletion may cause discontinuity between .brains and the Bonsai platform.
     """
     try:
-        brain_list = api(use_aad=USE_AAD_AUTH).list_brains()
+        brain_list = api(use_aad=True).list_brains()
         brains = brain_list['brains']
     except BrainServerError as e:
         raise_as_click_exception(e)
@@ -458,7 +455,7 @@ def brain_delete(ctx, brain_name):
                    "No action was taken.".format(brain_name))
     else:
         try:
-            api(use_aad=USE_AAD_AUTH).delete_brain(brain_name)
+            api(use_aad=True).delete_brain(brain_name)
         except BrainServerError as e:
             raise_as_click_exception(e)
     _global_version_check(ctx)
@@ -506,7 +503,7 @@ def brain_push(ctx, brain, project, json):
         log.debug("Uploading files={}".format(files))
 
     try:
-        status = api(use_aad=USE_AAD_AUTH).get_brain_status(brain)
+        status = api(use_aad=True).get_brain_status(brain)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -516,7 +513,7 @@ def brain_push(ctx, brain, project, json):
             "Can't push while training. Please stop training first.")
 
     try:
-        response = api(use_aad=USE_AAD_AUTH).edit_brain(brain, bproj)
+        response = api(use_aad=True).edit_brain(brain, bproj)
     except BrainServerError as e:
         raise_as_click_exception(e)
 
@@ -576,7 +573,7 @@ def brain_pull(ctx, all, brain):
 
     try:
         click.echo("Pulling files from {}...".format(target_brain))
-        files = api(use_aad=USE_AAD_AUTH).get_brain_files(brain_name=target_brain)
+        files = api(use_aad=True).get_brain_files(brain_name=target_brain)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -647,7 +644,7 @@ def _brain_download(brain_name, dest_dir):
 
     try:
         click.echo("Downloading files...")
-        files = api(use_aad=USE_AAD_AUTH).get_brain_files(brain_name=brain_name)
+        files = api(use_aad=True).get_brain_files(brain_name=brain_name)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -694,7 +691,7 @@ def sims_list(ctx, brain, project, json, verbose):
     brain = brain_fallback(brain, project)
 
     try:
-        content = api(use_aad=USE_AAD_AUTH).list_simulators(brain)
+        content = api(use_aad=True).list_simulators(brain)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -737,7 +734,7 @@ def brain_train_start(ctx, brain, project, sim_local, json):
     """Trains the specified BRAIN."""
     check_dbrains(project)
     brain = brain_fallback(brain, project)
-    brain_api = api(use_aad=USE_AAD_AUTH)
+    brain_api = api(use_aad=True)
 
     try:
         log.debug('Getting status for BRAIN: {}'.format(brain))
@@ -761,7 +758,7 @@ def brain_train_start(ctx, brain, project, sim_local, json):
             log.debug(
                 "When training completes, connect simulators to {}{} "
                 "for predictions".format(
-                    Config(control_plane_auth=True, use_aad=USE_AAD_AUTH)._websocket_url(),
+                    Config(use_aad=True)._websocket_url(),
                     content["simulator_predictions_url"]))
         except KeyError:
             pass
@@ -782,7 +779,7 @@ def brain_train_status(ctx, brain, json, project):
     status = None
     try:
         log.debug('Getting status for BRAIN: {}'.format(brain))
-        status = api(use_aad=USE_AAD_AUTH).get_brain_status(brain)
+        status = api(use_aad=True).get_brain_status(brain)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -792,7 +789,7 @@ def brain_train_status(ctx, brain, json, project):
         log.debug('Outputting JSON')
         click.echo(dumps(status, indent=4, sort_keys=True))
     else:
-        config = Config(argv=sys.argv[0], control_plane_auth=True, use_aad=USE_AAD_AUTH)
+        config = Config(argv=sys.argv[0], use_aad=True)
         click.secho('Configuration Information', bold=True)
         click.echo('-'*27)
         click.echo('Profile: {}'.format(config.profile))
@@ -825,7 +822,7 @@ def brain_train_stop(ctx, brain, project, json):
     brain = brain_fallback(brain, project)
     try:
         log.debug('Stopping training for BRAIN: {}'.format(brain))
-        content = api(use_aad=USE_AAD_AUTH).stop_training_brain(brain)
+        content = api(use_aad=True).stop_training_brain(brain)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -844,7 +841,7 @@ def brain_train_stop(ctx, brain, project, json):
               help="Override to target another BRAIN")
 @click.option('--project', '-p',
               help='Override to target another project directory.')
-@click.option('--remote', '-r',  'sim_local', flag_value=False, default=True,
+@click.option('--remote', '-r', 'sim_local', flag_value=False, default=True,
               help='Resume simulator remotely on Bonsai\'s servers.')
 @click.option('--json', '-j', default=False, is_flag=True,
               help="Output json.")
@@ -855,7 +852,7 @@ def brain_train_resume(ctx, brain, project, sim_local, json):
     brain = brain_fallback(brain, project)
     try:
         log.debug('Resuming training for BRAIN: {}'.format(brain))
-        content = api(use_aad=USE_AAD_AUTH).resume_training_brain(brain, 'latest', sim_local)
+        content = api(use_aad=True).resume_training_brain(brain, 'latest', sim_local)
     except BrainServerError as e:
         raise_as_click_exception(e)
     except AuthenticationError as e:
@@ -869,7 +866,7 @@ def brain_train_resume(ctx, brain, project, sim_local, json):
             log.debug(
                 "When training completes, connect simulators to {}{} "
                 "for predictions".format(
-                    Config(control_plane_auth=True, use_aad=USE_AAD_AUTH)._websocket_url(),
+                    Config(use_aad=True)._websocket_url(),
                     content["simulator_predictions_url"]))
         except KeyError:
             pass
@@ -953,10 +950,20 @@ def _check_beta_status():
 
 
 def _validate_config():
+    click_echo('Checking for .bonsai file.', fg='yellow')
+    home_dir = os.path.expanduser('~')
+    dot_bonsai_home_dir = os.path.join(home_dir, '.bonsai')
+    if os.path.exists(dot_bonsai_home_dir) or os.path.exists('.bonsai'):
+        click_echo('Success! Found .bonsai file.', fg='green')
+    else:
+        click_echo('WARNING: No .bonsai found please run bonsai configure.',
+                   fg='yellow')
+    click_echo('-' * 70)
+
     click_echo('Validating Azure Active Directory login.', fg='yellow')
     try:
         # we don't care what is returned as long as no exception is raised
-        api(use_aad=USE_AAD_AUTH).list_brains()
+        api(use_aad=True).list_brains()
     except BrainServerError:
         raise_as_click_exception(
             'Unable to validate login credentials',
@@ -970,7 +977,7 @@ def _download_cartpole_demo():
     click_echo(
         'Downloading cartpole demo to test websocket...', fg='yellow')
     try:
-        files = api(use_aad=USE_AAD_AUTH).get_project('demos', 'cartpole')
+        files = api(use_aad=True).get_project('demos', 'cartpole')
     except BrainServerError:
         raise_as_click_exception(
             'Error while attempting to download cartpole demo from '
