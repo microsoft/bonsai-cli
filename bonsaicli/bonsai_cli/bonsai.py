@@ -174,7 +174,7 @@ def brain():
 @click.pass_context
 def configure(ctx, access_key, show):
     """Authenticate with the BRAIN Server."""
-    bonsai_config = Config(use_aad=True)
+    bonsai_config = Config(use_aad=True, require_workspace=False)
 
     if not access_key:
         web_master_url = 'https://web-master.azdev.bons.ai/accounts/settings'

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.6
+- #12658: require bonsai-ai 2.2.5 (stores workspace only in .bonsai file)
+
 ## 0.9.5
 - #12423: Remove legacy auth support in CLI
 
