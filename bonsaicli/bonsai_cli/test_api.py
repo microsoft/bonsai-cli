@@ -25,8 +25,7 @@ class TestBonsaiApi(TestCase):
     Contains all the tests for the bonsai api
     """
     def setUp(self):
-        self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/',
-                                 disable_telemetry=True)
+        self.tempapi = BonsaiAPI('fakekey', 'fakeuser', 'https://someurl/')
         self.timeout = self.tempapi.TIMEOUT
         self.runner = CliRunner()
         self.req_id = str(uuid4())

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.7
+- #13069: Perform CLI version checks with PyPI asynchronously
+- #12837: Use the same python executable when testing websocket in bonsai diagnose
+- Add debug log to api requests
+- #12833: Add new checks for invalid .bonsai files in bonsai diagnose
+- #13277: Improve NotAllowListed error reporting during bonsai configure 
+
 ## 0.9.6
 - #12658: require bonsai-ai 2.2.5 (stores workspace only in .bonsai file)
 

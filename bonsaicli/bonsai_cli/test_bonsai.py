@@ -21,6 +21,7 @@ from click.testing import CliRunner
 
 from bonsai_ai import Config
 from bonsai_ai.aad import AADClient
+from bonsai_ai.exceptions import AuthenticationError
 from bonsai_cli import __version__
 from bonsai_cli.api import BrainServerError, BonsaiAPI
 from bonsai_cli.bonsai import (
@@ -28,6 +29,8 @@ from bonsai_cli.bonsai import (
     _websocket_test, _validate_config)
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
+from bonsai_cli.utils import NullCliVersionChecker
+
 from typing import Any, cast
 
 SUCCESS_EXIT_CODE = 0
@@ -52,9 +55,19 @@ def _add_config():
     URL = 'http://testing'
 
     config = Config(use_aad=True)
-    config.disable_telemetry = True
     config._update(profile=PROFILE, url=URL,
                     accesskey=ACCESS_KEY, username=WORKSPACE)
+
+
+def _add_empty_dot_bonsai():
+    dot_bonsai = os.path.join(os.environ["HOME"], '.bonsai')
+    open(dot_bonsai, 'a').close()
+
+def _add_incomplete_dot_bonsai():
+    dot_bonsai = os.path.join(os.environ["HOME"], '.bonsai')
+    dot_bonsai_contents = '[DEFAULT]\nusername = abcdefghijklmnop'
+    with open(dot_bonsai, 'a') as db:
+        db.write(dot_bonsai_contents)
 
 
 @contextmanager
@@ -115,8 +128,9 @@ class TestMockedBrainCommand(TestCase):
         self.api = cast(Any, Mock())
         patcher = patch('bonsai_cli.bonsai.api',
                         new=Mock(return_value=self.api))
-        version_check_patcher = patch('bonsai_cli.bonsai.check_cli_version',
-                                      new=Mock(return_value=True))
+        version_check_patcher = patch(
+            'bonsai_cli.bonsai.AsyncCliVersionChecker',
+            new=NullCliVersionChecker)
 
         self.addCleanup(patcher.stop)
         self.addCleanup(version_check_patcher.stop)
@@ -334,7 +348,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test2.txt' in project_file.files)
 
             # Checks payload/filesdata that will be sent.
-            tempapi = BonsaiAPI(None, None, None, disable_telemetry=True)
+            tempapi = BonsaiAPI(None, None, None)
             (payload, filesdata) = tempapi._payload_create_brain(brain,
                                                                  project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
@@ -549,6 +563,14 @@ class TestMockedBrainCommand(TestCase):
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
                 self.assertTrue("url = FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
+
+    def test_bonsai_configure_not_allow_listed(self):
+        AADClient.get_workspace = Mock(side_effect=AuthenticationError('NotAllowListed'))
+        with temp_filesystem(self):
+            result = self.runner.invoke(cli, ['configure'], input=ACCESS_KEY)
+            self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
+            self.assertTrue('NotAllowListed' in result.output)
+            self.assertTrue('If you wish to use a different account' in result.output)
 
     def test_bonsai_configure_username_and_key_option(self):
         with temp_filesystem(self):
@@ -811,7 +833,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test2.txt' in project_file.files)
 
             # Checks payload/filesdata that will be sent.
-            tempapi = BonsaiAPI(None, None, None, disable_telemetry=True)
+            tempapi = BonsaiAPI(None, None, None)
             (payload, filesdata) = tempapi._payload_edit_brain(project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
             self.assertDictEqual(filesdata, {"test.txt": b'test content',
@@ -862,7 +884,7 @@ class TestMockedBrainCommand(TestCase):
             self.assertTrue('test2.txt' in project_file.files)
 
             # Checks payload/filesdata that will be sent.
-            tempapi = BonsaiAPI(None, None, None, disable_telemetry=True)
+            tempapi = BonsaiAPI(None, None, None)
             (payload, filesdata) = tempapi._payload_edit_brain(project_file)
             self._check_payload(payload, ["test.txt", "test2.txt"])
             self.assertDictEqual(filesdata, {"test.txt": b'test content',
@@ -1612,12 +1634,30 @@ class TestBonsaiDiagnose(TestCase):
             _check_beta_status()
 
     @patch('bonsai_cli.api.BonsaiAPI.list_brains')
-    def test_validate_config_error(self, patch_request):
+    def test_validate_aad_error(self, patch_request):
         with temp_filesystem(self):
             patch_request.side_effect = BrainServerError()
             _add_config()
-            with self.assertRaises(ClickException):
+            with self.assertRaises(ClickException) as ce:
                 _validate_config()
+            assert 'Unable to validate login credentials' \
+                in ce.exception.message
+
+    def test_validate_empty_bonsai_error(self):
+        with temp_filesystem(self):
+            _add_empty_dot_bonsai()
+            with self.assertRaises(ClickException) as ce:
+                _validate_config()
+            assert 'Your .bonsai file is empty' \
+                in ce.exception.message
+
+    def test_validate_missing_accesskey_error(self):
+        with temp_filesystem(self):
+            _add_incomplete_dot_bonsai()
+            with self.assertRaises(ClickException) as ce:
+                _validate_config()
+            assert 'Your .bonsai file is missing values (accesskey)' \
+                in ce.exception.message
 
     @patch('bonsai_cli.api.BonsaiAPI.list_brains')
     def test_validate_config_success(self, patch_request):

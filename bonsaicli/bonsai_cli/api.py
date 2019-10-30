@@ -1,4 +1,3 @@
-from bonsai_ai.aria_writer import AriaWriter, StartTrainingBrain
 import json
 import os
 import sys
@@ -106,7 +105,7 @@ class BonsaiAPI(object):
     TIMEOUT = 300
 
     def __init__(self, access_key, user_name, api_url,
-                 ws_url=None, disable_telemetry=False):
+                 ws_url=None):
         """
         Initializes the API object.
         :param access_key: The access key for the user. This can be obtained
@@ -127,23 +126,10 @@ class BonsaiAPI(object):
         self._user_info = self._get_user_info()
         self._session = requests.Session()
         self._session.proxies = getproxies()
-        self._aria_writer = AriaWriter(
-            cluster_url=api_url,
-            disable_telemetry=disable_telemetry)
-
-        # In the event of the writer being instantiated but no tracking event
-        # being sent a deadlock occurs. This flag is used to skip calling the
-        # code causing the deadlock
-        self._skip_aria_writer_close = False
 
         log.debug('API URL = {}'.format(self._api_url))
         log.debug('WS URL = {}'.format(self._ws_url))
         log.debug('User Info = {}'.format(self._user_info))
-
-    def __del__(self):
-        if self._skip_aria_writer_close:
-            return
-        self._aria_writer.close()
 
     @staticmethod
     def _get_user_info():
@@ -171,6 +157,7 @@ class BonsaiAPI(object):
         req_id = str(uuid4())
         headers_out = self._get_headers()
         headers_out.update({'RequestId': str(uuid4())})
+        log.debug('Attached following RequestID to headers: {}'.format(headers_out['RequestId']))
 
         if headers:
             headers_out.update(headers)
@@ -223,12 +210,10 @@ class BonsaiAPI(object):
             else:
                 raise UsageError('UNSUPPORTED HTTP REQUEST METHOD')
         except requests.exceptions.ConnectionError:
-            self._skip_aria_writer_close = True
             raise BrainServerError(
                 'Connection Error. Unable to connect to domain: {}. ' \
                 'Request ID: {}'.format(url, req_id))
         except requests.exceptions.Timeout:
-            self._skip_aria_writer_close = True
             raise BrainServerError(
                 'Request to {} timed out. Current timeout is {} seconds. ' \
                 'Use the --timeout/-t option to adjust the ' \
@@ -711,7 +696,6 @@ class BonsaiAPI(object):
             brain=brain_name
         )
         url = urljoin(self._api_url, url_path)
-        self._aria_writer.track(StartTrainingBrain(is_resume=False))
         return self._put(url=url, data=data)
 
     def get_brain_status(self, brain_name):
@@ -767,9 +751,6 @@ class BonsaiAPI(object):
             version=brain_version
         )
         url = urljoin(self._api_url, url_path)
-        self._aria_writer.track(
-            StartTrainingBrain(is_resume=True, brain_version=brain_version)
-        )
         return self._put(url=url, data=data)
 
 

@@ -1,9 +1,13 @@
 import click
-import requests
+import multiprocessing
+from multiprocessing.dummy import Pool
 import os
+import requests
 import sys
+import timeit
 
 from bonsai_ai import Config
+from bonsai_ai.logger import Logger
 from bonsai_cli import __version__
 from bonsai_cli.api import BonsaiAPI, BrainServerError
 from bonsai_cli.dotbrains import DotBrains
@@ -11,6 +15,8 @@ from bonsai_cli.projfile import ProjectFile
 from click._compat import get_text_stderr
 from configparser import NoSectionError
 from json import decoder
+
+log = Logger()
 
 
 def api(use_aad):
@@ -95,53 +101,141 @@ def check_dbrains(project=None):
         raise_as_click_exception(msg, err)
 
 
-def check_cli_version(print_up_to_date=True):
-    """ Compares local cli version with the one on pypi """
-    pypi_url = 'https://pypi.python.org/pypi/bonsai-cli/json'
-    pypi_version = None
-    err = None
-    try:
-        pypi_version = get_pypi_version(pypi_url)
-    except requests.exceptions.SSLError as e:
-        err = e
-    except requests.exceptions.RequestException as e:
-        err = e
-    except (decoder.JSONDecodeError, KeyError) as e:
-        err = e
-    user_cli_version = __version__
+class CliVersionCheckerInterface(object):
+    """
+    Checks the latest CLI version.
 
-    if not pypi_version:
-        click_echo('You are using bonsai-cli version ' + user_cli_version,
-                   fg='yellow')
-        click_echo(
-            'Unable to connect to PyPi and determine if CLI is up to date.',
-            fg='red')
-        if isinstance(err, requests.exceptions.SSLError):
+    This interface is purposefully not a context manager - it's annoying and
+    unnecessary to spam version upgrades when commands are failing to run.
+    """
+
+    def check_cli_version(self, wait=False, print_up_to_date=True):
+        raise NotImplementedError('check_cli_version not implemented')
+
+
+class AsyncCliVersionChecker(CliVersionCheckerInterface):
+    """
+    Checks the latest CLI version, asynchronously.
+    """
+
+    # When asked to produce a version check at the end of a command, we are
+    # willing to let the command wait up to this amount of time total before
+    # abandoning the version check.
+    #
+    # This is a balance between timely version notifications, and adding more
+    # latency to our own commands if PyPi is slow or unavailable.
+    #
+    # TODO: PyPi does not have have a latency SLA. Perform a long-running
+    # measurement experiment and back this up with actual percentiles.
+    _GIVE_UP_TIME_SECONDS = 0.5
+
+    def __init__(self):
+        """
+        Construct the checker.
+
+        Kicks off a background task to determine the latest CLI version.
+        """
+        # Counter-intuitively a dummy multiprocessing Pool is actually
+        # a thread pool, not a process pool. This is the fastest way of
+        # spawning a worker thread, that works in both Python 2 and 3.
+        #
+        # This will never be closed - the threads are daemonic.
+        self._pool = Pool(1)
+        self._result = self._pool.apply_async(self._query_version)
+
+    def check_cli_version(self, wait, print_up_to_date=True):
+        """
+        Compares local cli version with the one on PyPi.
+
+        If latest version is not yet known and wait is False, this function
+        blocks for a brief period of time to allow it to complete. If wait is
+        instead True, this function blocks indefinitely for a response.
+        """
+        pypi_version, err = self._get_version_result(wait)
+
+        # If we lack a latest version, only continue to print what we do know
+        # when waitiing was a requirement. When it wasn't, this appears as
+        # unexpected error output spam for an otherwise-innocent command.
+        if pypi_version is None and not wait:
+            return
+
+        user_cli_version = __version__
+
+        if not pypi_version:
+            click_echo('You are using bonsai-cli version ' + user_cli_version,
+                       fg='yellow')
             click_echo(
-                'The following SSL error occured while attempting to obtain'
-                ' the version information from PyPi. \n\n{}\n\n'.format(err) +
-                'SSL errors are usually a result of an out of date version of'
-                ' OpenSSL and/or certificates that may need to be updated.'
-                ' We recommend updating your python install to a more'
-                ' recent version. If this is not possible, \'pip install'
-                ' requests[security]\' may fix the problem.',
+                'Unable to connect to PyPi and determine if CLI is up to date.',
                 fg='red')
-        elif err:
+            if isinstance(err, requests.exceptions.SSLError):
+                click_echo(
+                    'The following SSL error occured while attempting to obtain'
+                    ' the version information from PyPi. \n\n{}\n\n'.format(err) +
+                    'SSL errors are usually a result of an out of date version of'
+                    ' OpenSSL and/or certificates that may need to be updated.'
+                    ' We recommend updating your python install to a more'
+                    ' recent version. If this is not possible, \'pip install'
+                    ' requests[security]\' may fix the problem.',
+                    fg='red')
+            elif err:
+                click_echo(
+                    'The following error occured while attempting to obtain the'
+                    ' version information from PyPi.\n\n{}\n'.format(err),
+                    fg='red')
+        elif user_cli_version != pypi_version:
+            click_echo('You are using bonsai-cli version ' + user_cli_version,
+                       fg='yellow')
+            click_echo('Bonsai update available. The most recent version is ' +
+                       pypi_version + '.', fg='yellow')
             click_echo(
-                'The following error occured while attempting to obtain the'
-                ' version information from PyPi.\n\n{}\n'.format(err),
-                fg='red')
-    elif user_cli_version != pypi_version:
-        click_echo('You are using bonsai-cli version ' + user_cli_version,
-                   fg='yellow')
-        click_echo('Bonsai update available. The most recent version is ' +
-                   pypi_version + '.', fg='yellow')
-        click_echo(
-            'Upgrade via pip using \'pip install --upgrade bonsai-cli\'',
-            fg='yellow')
-    elif print_up_to_date:
-        click_echo('You are using bonsai-cli version ' + user_cli_version +
-                   ', Everything is up to date.', fg='green')
+                'Upgrade via pip using \'pip install --upgrade bonsai-cli\'',
+                fg='yellow')
+        elif print_up_to_date:
+            click_echo('You are using bonsai-cli version ' + user_cli_version +
+                       ', Everything is up to date.', fg='green')
+
+    def _query_version(self):
+        log.debug('Checking latest CLI version...')
+        start_time = timeit.default_timer()
+
+        pypi_url = 'https://pypi.org/pypi/bonsai-cli/json'
+        pypi_version = get_pypi_version(pypi_url)
+
+        end_time = timeit.default_timer()
+        elapsed = end_time - start_time
+        log.debug('Checked latest CLI version in {} seconds.'.format(elapsed))
+
+        return pypi_version
+
+    def _get_version_result(self, wait):
+        if wait:
+            timeout = None
+        else:
+            timeout = self._GIVE_UP_TIME_SECONDS
+
+        pypi_version = None
+        err = None
+        try:
+            pypi_version = self._result.get(timeout)
+        except multiprocessing.TimeoutError:
+            log.debug('CLI version check has not completed')
+        except requests.exceptions.SSLError as e:
+            err = e
+        except requests.exceptions.RequestException as e:
+            err = e
+        except (decoder.JSONDecodeError, KeyError) as e:
+            err = e
+
+        return pypi_version, err
+
+
+class NullCliVersionChecker(CliVersionCheckerInterface):
+    """
+    Performs no CLI version checking, does nothing.
+    """
+
+    def check_cli_version(self, wait=False, print_up_to_date=True):
+        pass
 
 
 class CustomClickException(click.ClickException):
