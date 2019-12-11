@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import pprint
 from uuid import uuid4
 
 if sys.version_info >= (3, ):
@@ -157,7 +158,13 @@ class BonsaiAPI(object):
         req_id = str(uuid4())
         headers_out = self._get_headers()
         headers_out.update({'RequestId': str(uuid4())})
-        log.debug('Attached following RequestID to headers: {}'.format(headers_out['RequestId']))
+
+        scrubbed_headers = headers_out.copy()
+        token = scrubbed_headers.get('Authorization')
+        if token:
+            scrubbed_headers['Authorization'] = '***{}'.format(token[-10:])
+        log.debug('{} request headers:\n{}'.format(http_method,
+                                                   pprint.pformat(scrubbed_headers)))
 
         if headers:
             headers_out.update(headers)

@@ -561,7 +561,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = FOO" in lines)
+                self.assertTrue("url = https://FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
     def test_bonsai_configure_not_allow_listed(self):
@@ -592,7 +592,7 @@ class TestMockedBrainCommand(TestCase):
                 lines = result.split("\n")
 
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = FOO" in lines)
+                self.assertTrue("url = https://FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
 
     def test_configure_uses_correct_use_color_value(self):
@@ -619,7 +619,7 @@ class TestMockedBrainCommand(TestCase):
                 result = f.read()
                 lines = result.split("\n")
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = FOO" in lines)
+                self.assertTrue("url = https://FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
                 self.assertTrue("use_color = true" in lines)
 
@@ -658,7 +658,7 @@ class TestMockedBrainCommand(TestCase):
                 result = f.read()
                 lines = result.split("\n")
                 self.assertTrue("accesskey = {}".format(ACCESS_KEY) in lines)
-                self.assertTrue("url = FOO" in lines)
+                self.assertTrue("url = https://FOO" in lines)
                 self.assertTrue("username = {}".format(WORKSPACE) in lines)
                 self.assertTrue("use_color = true" in lines)
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.8
+- 13066: Print request headers in debug mode
+
 ## 0.9.7
 - #13069: Perform CLI version checks with PyPI asynchronously
 - #12837: Use the same python executable when testing websocket in bonsai diagnose
