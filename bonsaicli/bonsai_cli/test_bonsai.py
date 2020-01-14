@@ -403,7 +403,7 @@ class TestMockedBrainCommand(TestCase):
 
             result = self.runner.invoke(cli, ['create', 'mybrain'])
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
-            self.assertTrue('ERROR: Bonsai Command Failed' in result.output)
+            self.assertTrue('Failed to load .brains file' in result.output)
 
     @patch('bonsai_cli.projfile.os.path.getsize')
     def test_brain_create_file_size_too_large(self, mock_os_getsize):
@@ -496,7 +496,7 @@ class TestMockedBrainCommand(TestCase):
             # Check expected message to user.
             self.assertEqual(result.exit_code, FAILURE_EXIT_CODE)
             self.assertTrue(result.output.startswith(
-                "Error: Refusing to create and download"))
+                "Error: Cannot write project files using project-type"))
 
     def test_brain_create_invalid_json(self):
         """ Test bonsai create throws error when projfile

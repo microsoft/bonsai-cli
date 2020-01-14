@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.9
+- #14057: Fix for websocket test in bonsai diagnose
+- #13700: Fix for bonsai create pushing an incorrect project file to service
+
 ## 0.9.8
 - 13066: Print request headers in debug mode
 

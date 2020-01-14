@@ -48,6 +48,16 @@ settings if they are needed in future development of the cli.
 """
 CONTEXT_SETTINGS = dict(help_option_names=['--help', '-h'])
 
+# A minimal sim definition, used to test websockets in bonsai diagnose
+WEBSOCKET_TEST_PROGRAM = """
+from bonsai_ai import Brain, Simulator, Config
+config = Config()
+config.brain = 'foo--s'
+sim = Simulator(Brain(config), 'CartpoleSim')
+while sim.run():
+    pass
+"""
+
 
 def _add_or_default_brain(directory, brain_name):
     """
@@ -55,7 +65,6 @@ def _add_or_default_brain(directory, brain_name):
     Will create .brains file if it doesn't exist
     :param directory: Path to check/create .brains at
     :param brain_name: BRAIN name to set as default
-    :param json: json flag from function that calls _add_or_default_brain
     """
     db = DotBrains(directory)
     brain = db.find(brain_name)
@@ -327,8 +336,7 @@ def brain_list(ctx, json):
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
-def brain_create_server(brain_name, project_file=None,
-                        project_type=None, json=None):
+def check_brain_already_exists(brain_name):
     brain_exists = None
     try:
         brain_exists = api(use_aad=True).get_brain_exists(brain_name)
@@ -341,23 +349,31 @@ def brain_create_server(brain_name, project_file=None,
         click.echo("Brain {} exists.".format(brain_name))
         click.echo("Run \'bonsai push\' to push new inkling"
                    " and training source into {}".format(brain_name))
-    else:
-        try:
-            if project_type:
-                response = api(use_aad=True).create_brain(brain_name,
-                                              project_type=project_type)
-            elif project_file:
-                response = api(use_aad=True).create_brain(brain_name,
-                                              project_file=project_file)
-            else:
-                # TODO: Dead code that is never reached in the logic
-                # TODO: Leaving it as it is part of the function signature
-                response = api(use_aad=True).create_brain(brain_name)
-        except BrainServerError as e:
-            raise_as_click_exception(e)
+    return brain_exists
 
-        if json:
-            click.echo(dumps(response, indent=4, sort_keys=True))
+
+def brain_create_from_file(brain_name, project_file, json=None):
+    if check_brain_already_exists(brain_name):
+        return
+    try:
+        response = api(use_aad=True).create_brain(brain_name,
+                                                  project_file=project_file)
+    except BrainServerError as e:
+        raise_as_click_exception(e)
+    if json:
+        click.echo(dumps(response, indent=4, sort_keys=True))
+
+
+def brain_create_project_type(brain_name, project_type, json=None):
+    if check_brain_already_exists(brain_name):
+        return
+    try:
+        response = api(use_aad=True).create_brain(brain_name,
+                                                  project_type=project_type)
+    except BrainServerError as e:
+        raise_as_click_exception(e)
+    if json:
+        click.echo(dumps(response, indent=4, sort_keys=True))
 
 
 def _is_empty_dir(dir):
@@ -368,15 +384,6 @@ def _is_empty_dir(dir):
         else:
             return False
     return True
-
-
-def _brain_create_err_msg(project):
-    """ Returns a string containing an error message
-        that points to the appropriate project file """
-
-    return "Bonsai Create Failed.\nFailed to load project file '{}'".format(
-            ProjectFile.find(os.path.dirname(project)) if project
-            else ProjectFile.find(os.getcwd()))
 
 
 @click.command('create',
@@ -394,58 +401,57 @@ def brain_create_local(ctx, brain_name, project, project_type, json):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
     version_checker = _get_version_checker(ctx, interactive=not json)
 
-    # TODO: Consider refactoring this function.
-    # TODO: Logic is starting to get convuluted.
-    check_dbrains(project)
+    # Get project directory (must be empty if using project-type)
+    project_directory = os.path.dirname(project) if project else os.getcwd()
+    if project_type and not _is_empty_dir(project_directory):
+        raise click.ClickException("Cannot write project files using "
+                                   "project-type to a non-empty directory. "
+                                   "Please run in an empty directory.")
 
-    # if the brain_name was left blank, try to pull one from .brains
-    # if none available, raise UsageError and abort
+    # Initialize DotBrains (load from .brains file if exists, else create
+    # a new one). Do not write to file yet.
+    dot_brains = None
+    try:
+        dot_brains = DotBrains(project_directory)
+    except ValueError as err:
+        file_location = DotBrains.find_file(project_directory)
+        msg = "Failed to load .brains file '{}'".format(file_location)
+        raise_as_click_exception(msg, err)
+
+    # Get brain name
     if brain_name == '':
-        default = DotBrains().get_default()
-        if default is None:
+        default_brain = dot_brains.get_default()
+        if not default_brain:
             raise click.UsageError(ctx.get_usage())
-        else:
-            brain_name = default.name
+        brain_name = default_brain.name
 
     if project_type:
-        # Create brain using project_type.
-
-        # Make sure clean directory before continuing.
-        cur_dir = os.getcwd()
-        if not _is_empty_dir(cur_dir):
-            message = ("Refusing to create and download project files "
-                       "using project-type in non-empty directory. "
-                       "Please run in an empty directory.")
-            raise click.ClickException(message)
-
-        brain_create_server(brain_name, project_type=project_type, json=json)
-        _brain_download(brain_name, cur_dir)
-        try:
-            bproj = ProjectFile.from_file_or_dir(cur_dir)
-        except ValueError as e:
-            err_msg = _brain_create_err_msg(project)
-            raise_as_click_exception(err_msg, e)
+        # If project-type, create brain in service and download project files
+        brain_create_project_type(brain_name, project_type, json=json)
+        _brain_download(brain_name, project_directory)
     else:
-        # Create brain using project file.
+        # If not project-type, first instantiate ProjectFile
+        bproj = None
         try:
-            if project:
-                bproj = ProjectFile.from_file_or_dir(project)
-            else:
-                bproj = ProjectFile()
-        except ValueError as e:
-            err_msg = _brain_create_err_msg(project)
-            raise_as_click_exception(err_msg, e)
-
-        try:
+            bproj = ProjectFile.from_file_or_dir(project_directory)
             _validate_project_file(bproj)
+        except ValueError as e:
+            msg = ("Bonsai Create Failed.\nFailed to load project "
+                    "file '{}'".format(ProjectFile.find(project_directory)))
+            raise_as_click_exception(msg, e)
         except FileTooLargeError as e:
             raise_as_click_exception("Bonsai Create Failed.\n " + e.message)
 
-        brain_create_server(brain_name, project_file=bproj, json=json)
+        # Apply ProjectFile defaults (does nothing if project already exists)  
+        # and save.  
+        ProjectDefault.apply(bproj)
+        bproj.save()
 
-    _add_or_default_brain(bproj.directory(), brain_name)
-    ProjectDefault.apply(bproj)
-    bproj.save()
+        # Create brain in service
+        brain_create_from_file(brain_name, bproj, json=json)
+
+    # Set brain to default in .brains (creates new .brains if none exists)
+    _add_or_default_brain(project_directory, brain_name)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -659,8 +665,9 @@ def brain_download(ctx, brain_name):
     version_checker = _get_version_checker(ctx, interactive=True)
 
     check_dbrains()
-    _brain_download(brain_name, brain_name)
 
+    # Use brain name for project directory name as well
+    _brain_download(brain_name, brain_name)
     _add_or_default_brain(brain_name, brain_name)
 
     click.echo(("Download request succeeded. "
@@ -937,7 +944,7 @@ NETWORK_HELP_STRING = \
     After you have enabled the above on your network, please run
     `bonsai diagnose` again.
 
-    If your are still having issues, please contact Bonsai support.
+    If you are still having issues, please contact Bonsai support.
     """
 
 
@@ -951,7 +958,7 @@ def diagnose():
     _validate_config()
     with CliRunner().isolated_filesystem():
         _download_cartpole_demo()
-        _websocket_test()
+    _websocket_test()
     click_echo('Success all tests passed!', fg='green')
 
 
@@ -1067,9 +1074,7 @@ def _websocket_test():
         fg='yellow')
     try:
         result = subprocess.check_output(
-            [sys.executable, 'cartpole_simulator.py',
-             '--brain', 'foo--s',
-             '--retry-timeout', '0'],
+            [sys.executable, '-c', WEBSOCKET_TEST_PROGRAM],
             stderr=subprocess.STDOUT)
         result = result.decode('utf-8')
         log.debug('Output of websocket test: {}'.format(result))
