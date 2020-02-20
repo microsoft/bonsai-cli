@@ -27,7 +27,7 @@ setup(
         'requests>=2.11',
         'tabulate>=0.7.5',
         'websocket-client>=0.40.0',
-        'bonsai-ai>=2.2.8',
+        'bonsai-ai>=2.2.9',
     ],
     packages=find_packages(),
     python_requires='>=3.5',
