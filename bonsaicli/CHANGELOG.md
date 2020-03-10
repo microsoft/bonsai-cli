@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.11
+- #14057: Roll back bonsai-ai requirement to 2.2.8
+
+## 0.9.10
+- #11789: Require bonsai-ai 2.2.9 (store auth tokens in the platform keystore)
+
 ## 0.9.9
 - #14057: Fix for websocket test in bonsai diagnose
 - #13700: Fix for bonsai create pushing an incorrect project file to service
