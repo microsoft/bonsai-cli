@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.12
+- #14057: Fix previous release
+
 ## 0.9.11
 - #14057: Roll back bonsai-ai requirement to 2.2.8
 
