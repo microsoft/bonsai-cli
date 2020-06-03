@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- #16825: Remove PyPi version check
+- #14879: Remove aad client write cache functions
+- Component Governance: Update requests to 2.23.0
+
 ## 0.9.12
 - #14057: Fix previous release
 
