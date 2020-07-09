@@ -593,12 +593,6 @@ class BonsaiAPI(object):
                 aad_client = AADClient(self._api_url)
                 self._access_key = aad_client.get_access_token()
 
-                # Needed for when a user that is not logged in tries to create
-                # a brain. The first call to check if brain already exists
-                # should write the AAD cache, so that the following call to
-                # create the brain doesn't ask for login again.
-                aad_client.cache.write_cache_to_file()
-
                 # replace username with workspace in url, then retry request
                 workspace = aad_client.get_workspace()
                 url = url.replace(self._user_name, workspace)

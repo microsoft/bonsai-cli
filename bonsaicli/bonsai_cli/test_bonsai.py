@@ -29,7 +29,6 @@ from bonsai_cli.bonsai import (
     _websocket_test, _validate_config)
 from bonsai_cli.dotbrains import DotBrains
 from bonsai_cli.projfile import ProjectFile
-from bonsai_cli.utils import NullCliVersionChecker
 
 from typing import Any, cast
 
@@ -128,14 +127,8 @@ class TestMockedBrainCommand(TestCase):
         self.api = cast(Any, Mock())
         patcher = patch('bonsai_cli.bonsai.api',
                         new=Mock(return_value=self.api))
-        version_check_patcher = patch(
-            'bonsai_cli.bonsai.AsyncCliVersionChecker',
-            new=NullCliVersionChecker)
-
         self.addCleanup(patcher.stop)
-        self.addCleanup(version_check_patcher.stop)
         patcher.start()
-        version_check_patcher.start()
 
         AADClient.get_access_token = Mock(return_value=BEARER_TOKEN)
         AADClient.get_workspace = Mock(return_value=WORKSPACE)
@@ -1514,9 +1507,9 @@ class TestMockedBrainCommand(TestCase):
 
     def test_timeout_option(self):
         with temp_filesystem(self):
-            result = self.runner.invoke(cli, ['--timeout', 10, 'list'])
+            result = self.runner.invoke(cli, ['--timeout', '10', 'list'])
             assert BonsaiAPI.TIMEOUT == 10
-            result = self.runner.invoke(cli, ['--timeout', 35, 'list'])
+            result = self.runner.invoke(cli, ['--timeout', '35', 'list'])
             assert BonsaiAPI.TIMEOUT == 35
 
 
@@ -1524,59 +1517,15 @@ class TestPyPiVersionRequest(TestCase):
     """ Contains all the tests for --version in cli """
     def setUp(self):
         self.runner = CliRunner()
+        self.version_output = 'You are using bonsai-cli version ' +  __version__
 
-        self.req_fail_output = 'You are using bonsai-cli version ' + \
-                               __version__ + '\n' + \
-                               'Unable to connect to PyPi and ' \
-                               'determine if CLI is up to date.\n'
-        self.not_up_to_date_output = 'You are using bonsai-cli version ' + \
-                                     __version__ + \
-                                     '\nBonsai update available. The most ' \
-                                     'recent version is 9999.\nUpgrade via ' \
-                                     'pip using \'pip install --upgrade ' \
-                                     'bonsai-cli\'\n'
-        self.up_to_date_output = 'You are using bonsai-cli version ' + \
-                                 __version__ + \
-                                 ', Everything is up to date.'
-
-    def test_get_pypi_version_valid_url(self):
-        """ Test PyPi version request with valid url """
-        _get_pypi_version = Mock(return_value='0.8.14')
-        pypi_version = _get_pypi_version('valid_url')
-        self.assertNotEqual(pypi_version, None)
-
-    def test_get_pypi_version_invalid_url(self):
-        """ Test PyPi version request with invalid url """
-        _get_pypi_version = Mock(return_value=None)
-        pypi_version = _get_pypi_version('invalid_url')
-        self.assertEqual(pypi_version, None)
-
-    @patch('bonsai_cli.utils.get_pypi_version', return_value=None)
-    def test_request_fail_cli_output(self, patched_function):
-        """ Test output when request failure/json failure """
+    def test_version_cli_output(self):
+        """ Test --version output """
         with temp_filesystem(self):
             _add_config()
             result = self.runner.invoke(cli, ['--version'])
             self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-            self.assertIn(self.req_fail_output, result.output)
-
-    @patch('bonsai_cli.utils.get_pypi_version', return_value='9999')
-    def test_version_not_up_to_date_cli_output(self, patched_function):
-        """ Test output when cli is out of date """
-        with temp_filesystem(self):
-            _add_config()
-            result = self.runner.invoke(cli, ['--version'])
-            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-            self.assertIn(self.not_up_to_date_output, result.output)
-
-    @patch('bonsai_cli.utils.get_pypi_version', return_value=__version__)
-    def test_version_up_to_date_cli_output(self, patched_function):
-        """ Test output when cli is up to date """
-        with temp_filesystem(self):
-            _add_config()
-            result = self.runner.invoke(cli, ['--version'])
-            self.assertEqual(result.exit_code, SUCCESS_EXIT_CODE)
-            self.assertIn(self.up_to_date_output, result.output)
+            self.assertIn(self.version_output, result.output)
 
 
 class TestSysInfo(TestCase):

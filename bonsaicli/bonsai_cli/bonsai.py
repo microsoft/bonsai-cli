@@ -29,8 +29,8 @@ from bonsai_cli.projfile import ProjectDefault
 from bonsai_cli.projfile import (
     ProjectFile, ProjectFileInvalidError, FileTooLargeError)
 from bonsai_cli.utils import (
-    AsyncCliVersionChecker, api, brain_fallback, check_dbrains, click_echo,
-    get_default_brain, list_profiles, NullCliVersionChecker,
+    check_cli_version, api, brain_fallback, check_dbrains, click_echo,
+    get_default_brain, list_profiles,
     print_profile_information, raise_as_click_exception)
 
 
@@ -85,7 +85,7 @@ def _version_callback(ctx, param, value):
     """
     if not value or ctx.resilient_parsing:
         return
-    AsyncCliVersionChecker().check_cli_version(wait=True)
+    check_cli_version()
     ctx.exit()
 
 
@@ -117,17 +117,6 @@ def _set_color(ctx, param, value):
     ctx.exit()
 
 
-def _get_version_checker(ctx, interactive):
-    """
-    param ctx: Click context
-    param interactive: True if the caller is interactive
-    """
-    if ctx.obj['VERSION_CHECK'] and interactive:
-        return AsyncCliVersionChecker()
-    else:
-        return NullCliVersionChecker()
-
-
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.option('--debug', '-d', is_flag=True, default=False,
               help='Enable verbose debugging output.')
@@ -142,7 +131,8 @@ def _get_version_checker(ctx, interactive):
 @click.option('--enable-color/--disable-color', callback=_set_color,
               help='Enable/disable color printing.',
               expose_value=False, is_eager=True, default=None)
-@click.option('--disable-version-check', '-dv', is_flag=True, default=False)
+@click.option('--disable-version-check', '-dv', is_flag=True, default=False,
+              help='Deprecated. Version checking no longer supported.')
 @click.option('--aad', '-a', default=False, is_flag=True,
               help='Deprecated. All commands authenticate with Azure Active '
               'Directory by default.')
@@ -162,16 +152,13 @@ def cli(ctx, debug, timeout, disable_version_check, aad):
 
     # https://click.palletsprojects.com/en/7.x/commands/#nested-handling-and-contexts
     ctx.ensure_object(dict)
-    ctx.obj['VERSION_CHECK'] = False if disable_version_check else True
 
 
 @click.command('help')
 @click.pass_context
 def bonsai_help(ctx):
     """ Show this message and exit. """
-    version_checker = _get_version_checker(ctx, interactive=True)
     click.echo(ctx.parent.get_help())
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 @click.group()
@@ -187,7 +174,6 @@ def brain():
 @click.pass_context
 def configure(ctx, access_key, show):
     """Authenticate with the BRAIN Server."""
-    version_checker = _get_version_checker(ctx, interactive=True)
 
     bonsai_config = Config(use_aad=True, require_workspace=False)
 
@@ -231,7 +217,6 @@ def configure(ctx, access_key, show):
 
     if show:
         print_profile_information(bonsai_config)
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 @click.command()
@@ -247,7 +232,6 @@ def switch(ctx, profile, url, show, help_option):
     Change the active configuration section.\n
     For new profiles you must provide a url with the --url option.
     """
-    version_checker = _get_version_checker(ctx, interactive=True)
 
     config = Config(argv=sys.argv[0], use_aad=False)
     # `bonsai switch` and `bonsai switch -h/--help have the same output
@@ -279,7 +263,6 @@ def switch(ctx, profile, url, show, help_option):
                "Commands will target: {}".format(profile, url))
     if show:
         print_profile_information(config)
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 @click.group()
@@ -294,7 +277,6 @@ def sims():
 @click.pass_context
 def brain_list(ctx, json):
     """Lists BRAINs owned by current user."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     try:
         content = api(use_aad=True).list_brains()
@@ -333,7 +315,6 @@ def brain_list(ctx, json):
         else:
             click.echo('The current user has not created any brains.')
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 def check_brain_already_exists(brain_name):
@@ -399,7 +380,6 @@ def _is_empty_dir(dir):
               help='Output json.')
 def brain_create_local(ctx, brain_name, project, project_type, json):
     """Creates a BRAIN and sets the default BRAIN for future commands."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     # Get project directory (must be empty if using project-type)
     project_directory = os.path.dirname(project) if project else os.getcwd()
@@ -442,8 +422,8 @@ def brain_create_local(ctx, brain_name, project, project_type, json):
         except FileTooLargeError as e:
             raise_as_click_exception("Bonsai Create Failed.\n " + e.message)
 
-        # Apply ProjectFile defaults (does nothing if project already exists)  
-        # and save.  
+        # Apply ProjectFile defaults (does nothing if project already exists)
+        # and save.
         ProjectDefault.apply(bproj)
         bproj.save()
 
@@ -452,8 +432,6 @@ def brain_create_local(ctx, brain_name, project, project_type, json):
 
     # Set brain to default in .brains (creates new .brains if none exists)
     _add_or_default_brain(project_directory, brain_name)
-
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 @click.command("delete",
@@ -467,7 +445,6 @@ def brain_delete(ctx, brain_name):
     This operation has no effect on your local file system.
     Deletion may cause discontinuity between .brains and the Bonsai platform.
     """
-    version_checker = _get_version_checker(ctx, interactive=True)
 
     try:
         brain_list = api(use_aad=True).list_brains()
@@ -488,8 +465,6 @@ def brain_delete(ctx, brain_name):
         except BrainServerError as e:
             raise_as_click_exception(e)
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
 
 @click.command("push")
 @click.option('--brain', '-b',
@@ -501,7 +476,6 @@ def brain_delete(ctx, brain_name):
 @click.pass_context
 def brain_push(ctx, brain, project, json):
     """Uploads project file(s) to a BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     check_dbrains(project)
     brain = brain_fallback(brain, project)
@@ -563,8 +537,6 @@ def brain_push(ctx, brain, project, json):
         for file in response["files"]:
             click.echo("{}".format(file))
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
 
 def _validate_project_file(project_file):
     """ Sends error message to user if project file invalid. """
@@ -601,7 +573,6 @@ def _print_inkling_errors_or_warnings(errors_or_warnings):
 def brain_pull(ctx, all, brain):
     """Pulls files related to the default BRAIN or the
        BRAIN provided by the option."""
-    version_checker = _get_version_checker(ctx, interactive=True)
 
     check_dbrains()
     target_brain = brain if brain else get_default_brain()
@@ -617,8 +588,6 @@ def brain_pull(ctx, all, brain):
     if not all:
         files = _user_select(files)
     _pull(files)
-
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 def _pull(files):
@@ -662,7 +631,6 @@ def _user_select(files):
 @click.pass_context
 def brain_download(ctx, brain_name):
     """Downloads all the files related to a BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=True)
 
     check_dbrains()
 
@@ -672,8 +640,6 @@ def brain_download(ctx, brain_name):
 
     click.echo(("Download request succeeded. "
                 "Files saved to directory '{}'".format(brain_name)))
-
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 def _brain_download(brain_name, dest_dir):
@@ -727,7 +693,6 @@ def brain_train():
 @click.pass_context
 def sims_list(ctx, brain, project, json, verbose):
     """List the simulators connected to a BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     check_dbrains(project)
     brain = brain_fallback(brain, project)
@@ -760,8 +725,6 @@ def sims_list(ctx, brain, project, json, verbose):
                         'Please run \'bonsai train start\' first.'
             click.echo(err_msg)
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
 
 @click.command('start')
 @click.option('--brain', '-b',
@@ -775,7 +738,6 @@ def sims_list(ctx, brain, project, json, verbose):
 @click.pass_context
 def brain_train_start(ctx, brain, project, sim_local, json):
     """Trains the specified BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     check_dbrains(project)
     brain = brain_fallback(brain, project)
@@ -808,8 +770,6 @@ def brain_train_start(ctx, brain, project, sim_local, json):
         except KeyError:
             pass
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
 
 @click.command('status')
 @click.option('--brain', '-b', help="Override to target another BRAIN.")
@@ -820,7 +780,6 @@ def brain_train_start(ctx, brain, project, sim_local, json):
 @click.pass_context
 def brain_train_status(ctx, brain, json, project):
     """Gets training status on the specified BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     check_dbrains(project)
     brain = brain_fallback(brain, project)
@@ -854,8 +813,6 @@ def brain_train_status(ctx, brain, json, project):
                          tablefmt='simple')
         click.echo(table)
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
 
 @click.command("stop")
 @click.option('--brain', '-b',
@@ -867,7 +824,6 @@ def brain_train_status(ctx, brain, json, project):
 @click.pass_context
 def brain_train_stop(ctx, brain, project, json):
     """Stops training on the specified BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     check_dbrains(project)
     brain = brain_fallback(brain, project)
@@ -884,8 +840,6 @@ def brain_train_stop(ctx, brain, project, json):
         log.debug('Outputting JSON')
         click.echo(dumps(content, indent=4, sort_keys=True))
 
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
 
 @click.command('resume')
 @click.option('--brain', '-b',
@@ -899,7 +853,6 @@ def brain_train_stop(ctx, brain, project, json):
 @click.pass_context
 def brain_train_resume(ctx, brain, project, sim_local, json):
     """Resume training on the specified BRAIN."""
-    version_checker = _get_version_checker(ctx, interactive=not json)
 
     check_dbrains(project)
     brain = brain_fallback(brain, project)
@@ -923,8 +876,6 @@ def brain_train_resume(ctx, brain, project, sim_local, json):
                     content["simulator_predictions_url"]))
         except KeyError:
             pass
-
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 NETWORK_HELP_STRING = \
@@ -953,7 +904,7 @@ def diagnose():
     # TODO Place link to bonsai network documentation in error messages
     """Runs several tests to validate that the cli is working correctly"""
     click_echo('-' * 70)
-    AsyncCliVersionChecker().check_cli_version(wait=True)
+    check_cli_version()
     _check_beta_status()
     _validate_config()
     with CliRunner().isolated_filesystem():
