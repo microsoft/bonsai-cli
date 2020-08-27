@@ -36,6 +36,9 @@ _CREATE_BRAIN_VERSION_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains
 _UPDATE_BRAIN_VERSION_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}"
 _DELETE_BRAIN_VERSION_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}"
 
+_START_SIMULATOR_LOGGING_TEMPLATE= "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/simulators/{sessionId}/startLogging"
+_STOP_SIMULATOR_LOGGING_TEMPLATE= "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/simulators/{sessionId}/stopLogging"
+
 _LIST_SIM_PACKAGE_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/simulatorpackages"
 _GET_SIM_PACKAGE_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/simulatorpackages/{simulatorpackagename}"
 _CREATE_SIM_PACKAGE_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/simulatorpackages/{packagename}"
@@ -194,7 +197,7 @@ class BonsaiAPI(object):
             raise ValueError("Access key is missing")
 
         if(workspace_id is None):
-            raise ValueError("Workspace name is missing")
+            raise ValueError("Workspace ID is missing")
 
         if(api_url is None):
             raise ValueError("API url is missing")
@@ -293,7 +296,7 @@ class BonsaiAPI(object):
                                              allow_redirects=False,
                                              timeout=self.TIMEOUT)
             else:
-                raise UsageError('UNSUPPORTED HTTP REQUEST METHOD')
+                raise UsageError('Unsupported HTTP Request Method')
 
         except requests.exceptions.ConnectionError:
             raise BrainServerError(
@@ -719,7 +722,31 @@ class BonsaiAPI(object):
 
         return self._post(url=url, debug=debug, output=output)
 
-    def reset_training(self, name: str, version: int, concept_name: str, lesson_number: str, workspace: Optional[str] = None, debug: bool = False, output: Optional[str] = None):
+    def start_logging(self, name: str, session_id: str, version: int = 1, workspace: Optional[str] = None, debug: bool = False, output: Optional[str] = None):
+        url_path = _START_SIMULATOR_LOGGING_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=name,
+            version=version,
+            sessionId= session_id
+        )
+
+        url = urljoin(self._api_url, url_path)
+
+        return self._post(url=url, debug=debug, output=output)
+    
+    def stop_logging(self, name: str, session_id: str, version: int = 1, workspace: Optional[str] = None, debug: bool = False, output: Optional[str] = None):
+        url_path = _STOP_SIMULATOR_LOGGING_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=name,
+            version=version,
+            sessionId= session_id
+        )
+
+        url = urljoin(self._api_url, url_path)
+
+        return self._post(url=url, debug=debug, output=output)
+
+    def reset_training(self, name: str, version: int, all:bool, concept_name: str, lesson_number: str, workspace: Optional[str] = None, debug: bool = False, output: Optional[str] = None):
         url_path = _RESET_BRAIN_TRAINING_URL_PATH_TEMPLATE.format(
             workspacename=workspace if workspace else self._workspace_id,
             name=name,
@@ -729,7 +756,12 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
 
         concepts = [{"name":concept_name, "lessonIndex": lesson_number}]
-        data = { "resetAll": False, "concepts": concepts}
+
+        if all:
+            data = {"resetAll": True}
+        else:
+            data = {"concepts": concepts}
+
         return self._post(url=url, data=data, debug=debug, output=output)
 
     def start_assessment(self, name: str, version: int = 1, workspace: Optional[str] = None, debug: bool = False, output: Optional[str] = None):
@@ -757,6 +789,7 @@ class BonsaiAPI(object):
     def create_exported_brain(self,
                               name: str,
                               processor_architecture: str,
+                              os_type: str,
                               brain_name: str,
                               brain_version: int,
                               display_name: Optional[str] = None,
@@ -772,8 +805,10 @@ class BonsaiAPI(object):
 
         data = {"name": name,
                 "subscription": '', "resourceGroup": '',
-                "processorArchitecture": processor_architecture, "brainName": brain_name,
-                "brainVersion": brain_version, "displayName": display_name, "description": description}
+                "processorArchitecture": processor_architecture, 
+                "osType": os_type, "brainName": brain_name, 
+                "brainVersion": brain_version, "displayName": display_name, 
+                "description": description}
 
         return self._post(url=url, data=data, debug=debug, output=output)
 
