@@ -455,7 +455,7 @@ def delete_brain(
     if not name:
         raise_as_click_exception("\nName of the brain is required")
 
-    is_delete = True
+    is_delete = False
 
     if not yes:
         click.echo(
@@ -885,7 +885,7 @@ def list_brain_version(
     else:
         table = tabulate(
             rows,
-            headers=["VERSION", "TRAINING STATE", "ASSESSMENT STATE"],
+            headers=["Version", "Training State", "Assessment State"],
             tablefmt="orgtbl",
         )
         click.echo(table)
@@ -936,7 +936,7 @@ def delete_brain_version(
     if not name:
         raise_as_click_exception("\nName of the brain is required")
 
-    is_delete = True
+    is_delete = False
 
     if not yes:
         click.echo(
@@ -1484,11 +1484,186 @@ def stop_training(
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
+@click.command("start-logging", short_help="Start logging for a simulator session. Only unmanaged simulators are supported now.", hidden=True)
+@click.option("--name", "-n", help="[Required] Name of the brain.")
+@click.option("--version", type=int, help="Version to start logging, defaults to latest.")
+@click.option(
+    "--session-id", "-d",
+    help="Identifier for the simulator",
+)
+@click.option(
+    "--workspace-id",
+    "-wid",
+    help="Please provide the workspace id if you would like to override the default target workspace.",
+    hidden=True,
+)
+@click.option(
+    "--debug", default=False, is_flag=True, help="Verbose logging for request."
+)
+@click.option("--output", "-o", help="Set output, only json supported.")
+@click.option(
+    "--test",
+    default=False,
+    is_flag=True,
+    help="Enhanced response for testing.",
+    hidden=True,
+)
+@click.pass_context
+def start_logging(
+    ctx: click.Context,
+    name: str,
+    version: int,
+    session_id: str,
+    workspace_id: str,
+    debug: bool,
+    output: str,
+    test: bool,
+):
+
+    version_checker = _get_version_checker(ctx, interactive=not output)
+
+    if not name:
+        raise_as_click_exception("\nName of the brain is required")
+
+    if not session_id:
+        raise_as_click_exception("\nSimulator session id is required")
+
+    if not version:
+        version = get_latest_brain_version(name, "Start-logging brain version", debug, output, test)
+
+    try:
+        response = api(use_aad=True).start_logging(
+            name, version=version, session_id=session_id, workspace=workspace_id, debug=debug
+        )
+
+    except BrainServerError as e:
+        if e.exception['statusCode'] == 404:
+            raise_not_found_as_click_exception(
+                debug,
+                output,
+                "Start-logging brain version",
+                "Brain '{}' version".format(name),
+                "{}".format(version),
+                test,
+                e,
+            )
+        else:
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+    except AuthenticationError as e:
+        raise_as_click_exception(e)
+
+    status_message = "{} version {} logging started.".format(name, version)
+
+    if output == "json":
+        json_response = {
+            "status": response["status"],
+            "statusCode": response["statusCode"],
+            "statusMessage": status_message,
+        }
+
+        click.echo(dumps(json_response, indent=4))
+
+    else:
+        click.echo(status_message)
+
+    version_checker.check_cli_version(wait=True, print_up_to_date=False)
+
+@click.command("stop-logging", short_help="Stop logging for a simulator session. Only unmanaged simulators are supported now.", hidden=True)
+@click.option("--name", "-n", help="[Required] Name of the brain.")
+@click.option("--version", type=int, help="Version to stop logging, defaults to latest.")
+@click.option(
+    "--session-id", "-d",
+    help="Identifier for the simulator",
+)
+@click.option(
+    "--workspace-id",
+    "-wid",
+    help="Please provide the workspace id if you would like to override the default target workspace.",
+    hidden=True,
+)
+@click.option(
+    "--debug", default=False, is_flag=True, help="Verbose logging for request."
+)
+@click.option("--output", "-o", help="Set output, only json supported.")
+@click.option(
+    "--test",
+    default=False,
+    is_flag=True,
+    help="Enhanced response for testing.",
+    hidden=True,
+)
+@click.pass_context
+def stop_logging(
+    ctx: click.Context,
+    name: str,
+    version: int,
+    session_id: str,
+    workspace_id: str,
+    debug: bool,
+    output: str,
+    test: bool,
+):
+
+    version_checker = _get_version_checker(ctx, interactive=not output)
+
+    if not name:
+        raise_as_click_exception("\nName of the brain is required")
+
+    if not session_id:
+        raise_as_click_exception("\nSimulator session id is required")
+
+    if not version:
+        version = get_latest_brain_version(name, "Stop-logging brain version", debug, output, test)
+
+    try:
+        response = api(use_aad=True).stop_logging(
+            name, version=version, session_id=session_id, workspace=workspace_id, debug=debug
+        )
+
+    except BrainServerError as e:
+        if e.exception['statusCode'] == 404:
+            raise_not_found_as_click_exception(
+                debug,
+                output,
+                "Start-logging brain version",
+                "Brain '{}' version".format(name),
+                "{}".format(version),
+                test,
+                e,
+            )
+        else:
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+    except AuthenticationError as e:
+        raise_as_click_exception(e)
+
+    status_message = "{} version {} logging stopped.".format(name, version)
+
+    if output == "json":
+        json_response = {
+            "status": response["status"],
+            "statusCode": response["statusCode"],
+            "statusMessage": status_message,
+        }
+
+        click.echo(dumps(json_response, indent=4))
+
+    else:
+        click.echo(status_message)
+
+    version_checker.check_cli_version(wait=True, print_up_to_date=False)
+
+
 @click.command("reset-training", short_help="Reset training for a brain version.")
 @click.option("--name", "-n", help="[Required] Name of the brain.")
-@click.option("--concept-name", "-c", help="[Required] Name of the concept to reset.")
-@click.option("--lesson-number", "-e", type=int, help="[Required] Lesson number to reset.")
 @click.option("--version", type=int, help="Version to reset training, defaults to latest.")
+@click.option("--all", default=False, is_flag=True, help="Flag to reset all concepts and lessons.")
+@click.option("--concept-name", "-c", help="Name of the concept to reset if you do not want to reset all concepts.")
+@click.option("--lesson-number", "-e", type=int, help="Lesson number to reset if you do not want to reset all lessons.")
+@click.option(
+    "--yes", "-y", default=False, is_flag=True, help="Do not prompt for confirmation."
+)
 @click.option(
     "--workspace-id",
     "-wid",
@@ -1511,8 +1686,10 @@ def reset_training(
     ctx: click.Context,
     name: str,
     version: int,
+    all: bool,
     concept_name: str,
     lesson_number: str,
+    yes:bool,
     workspace_id: str,
     debug: bool,
     output: str,
@@ -1528,13 +1705,23 @@ def reset_training(
         required_options_provided = False
         error_msg += "\nName of the brain is required"
 
-    if not concept_name:
+    if not all and not concept_name and not lesson_number:
         required_options_provided = False
-        error_msg += "\nConcept name is required"
+        error_msg += "\nEither specify the concept name and lesson number if you would like to reset a specific concept and lesson " \
+                     "or the --all flag if you would like to reset all concepts and lessons"
 
-    if not lesson_number:
+    if lesson_number and not concept_name:
         required_options_provided = False
-        error_msg += "\nLesson number is required"
+        error_msg += "\nSpecify concept name to be used with the lesson number"
+
+    if concept_name and not lesson_number:
+        required_options_provided = False
+        error_msg += "\nSpecify lesson number to be used with the concept name"
+
+    if all and (concept_name or lesson_number):
+        required_options_provided = False
+        error_msg += "\nSpecify the concept name and lesson number if you would like to reset a specific concept and lesson " \
+                     "or the --all flag if you would like to reset all concepts and lessons, but not both"
 
     if not required_options_provided:
         raise_as_click_exception(error_msg)
@@ -1542,38 +1729,60 @@ def reset_training(
     if not version:
         version = get_latest_brain_version(name, "Reset-training brain version", debug, output, test)
 
-    try:
-        log.debug("Resetting training for BRAIN: {}".format(id))
-        response = api(use_aad=True).reset_training(
-            name,
-            version=version,
-            concept_name=concept_name,
-            lesson_number=lesson_number,
-            workspace=workspace_id,
-            debug=debug,
+    is_delete = False
+
+    if not yes:
+        click.echo(
+            "Are you sure you want to reset training for brain {} version {} (y/n?).".format(
+                name, version
+            )
+        )
+        choice = input().lower()
+
+        yes_set = {"yes", "y"}
+        no_set = {"no", "n"}
+
+        if choice in yes_set:
+            is_delete = True
+        elif choice in no_set:
+            is_delete = False
+        else:
+            raise_as_click_exception("\nPlease respond with 'y' or 'n'")
+
+    if is_delete:
+        try:
+            log.debug("Resetting training for BRAIN: {}".format(id))
+            response = api(use_aad=True).reset_training(
+                name,
+                version=version,
+                all=all,
+                concept_name=concept_name,
+                lesson_number=lesson_number,
+                workspace=workspace_id,
+                debug=debug,
+            )
+
+        except BrainServerError as e:
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+        except AuthenticationError as e:
+            raise_as_click_exception(e)
+
+        status_message = "{} version {} training reset.".format(
+            name, response["version"]
         )
 
-    except BrainServerError as e:
-        raise_brain_server_error_as_click_exception(debug, output, test, e)
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
 
-    except AuthenticationError as e:
-        raise_as_click_exception(e)
+            click.echo(dumps(json_response, indent=4))
 
-    status_message = "{} version {} training reset.".format(
-        name, response["version"]
-    )
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+        else:
+            click.echo(status_message)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -2321,7 +2530,7 @@ def remove_simulator_package(
     if not name:
         raise_as_click_exception("\nName of the simulator package is required")
 
-    is_delete = True
+    is_delete = False
 
     if not yes:
         click.echo(
@@ -2494,7 +2703,7 @@ def list_simulator_unmanaged(
 
     else:
         table = tabulate(
-            rows, headers=["NAME", "SESSION-ID", "ACTION"], tablefmt="orgtbl"
+            rows, headers=["Name", "Session Id", "Action"], tablefmt="orgtbl"
         )
         click.echo(table)
 
@@ -2841,7 +3050,9 @@ def exportedbrain():
 @click.option(
     "--processor-architecture",
     "-pa",
-    help="[Required] Processor architecture for the exported brain.",
+    help="Processor architecture for the exported brain. (Note: arm32v7 and arm64v8 processor architectures are only available for Linux exported brains.)",
+    type=click.Choice(["x64", "arm32v7", "arm64v8"]),
+    default="x64"
 )
 @click.option(
     "--brain-name", "-bn", help="[Required] Name of the brain to be exported."
@@ -2866,6 +3077,13 @@ def exportedbrain():
     help="Enhanced response for testing.",
     hidden=True,
 )
+@click.option(
+    "--os-type",
+    "-os",
+    help="Operating system type for the exported brain container.  (Note: Windows exported brains are only available for the x64 processor architecture.)",
+    type=click.Choice(["linux", "windows"]),
+    default="linux"
+)
 def create_exportedbrain(
     ctx: click.Context,
     name: str,
@@ -2878,14 +3096,12 @@ def create_exportedbrain(
     debug: bool,
     output: str,
     test: bool,
+    os_type: str
 ):
     version_checker = _get_version_checker(ctx, interactive=not output)
 
     if not name:
         raise_as_click_exception("Name of the exported brain is required")
-
-    if not processor_architecture:
-        raise_as_click_exception("Processor architecture is required")
 
     if not name:
         raise_as_click_exception("Name of the brain to be exported is required")
@@ -2893,12 +3109,16 @@ def create_exportedbrain(
     if not brain_version:
         raise_as_click_exception("Version of the brain to be exported is required")
 
+    if os_type == "windows" and processor_architecture != "x64":
+        raise_as_click_exception("Only x64 is supported for Windows exported brains")
+
     try:
         response = api(use_aad=True).create_exported_brain(
             name,
             display_name=display_name,
             description=description,
             processor_architecture=processor_architecture,
+            os_type=os_type,
             brain_name=brain_name,
             brain_version=brain_version,
             workspace=workspace_id,
@@ -3183,7 +3403,7 @@ def delete_exportedbrain(
     if not name:
         raise_as_click_exception("Name of the exported brain is required")
 
-    is_delete = True
+    is_delete = False
 
     if not yes:
         click.echo(
@@ -3237,33 +3457,38 @@ def delete_exportedbrain(
 @click.command()
 @click.option("--workspace-id", "-w", help="[Required] Workspace ID.")
 @click.option("--tenant-id", help="Tenant ID.")
-@click.option("--show", is_flag=True, help="Prints active profile information.")
+@click.option("--show", is_flag=True, help="Prints active profile information. Workspace ID is not required when you want to only print active profile information.")
 @click.pass_context
 def configure(
-    ctx: click.Context,
-    workspace_id: str,
-    tenant_id: Optional[str] = None,
-    show: bool = False,
+        ctx: click.Context,
+        workspace_id: str,
+        tenant_id: Optional[str] = None,
+        show: bool = False,
 ):
-    """Authenticate with the Server."""
     version_checker = _get_version_checker(ctx, interactive=True)
 
-    if not workspace_id:
-        raise_as_click_exception("Workspace ID is required")
+    bonsai_config = Config(use_aad=True)
 
-    bonsai_config = Config(use_aad=True, require_workspace=False)
-
-    args = {
-        "workspace_id": workspace_id,
-        "tenant_id": tenant_id,
-        "url": "https://cp-api.bons.ai",
-        "gateway_url": "https://api.bons.ai",
-    }
-
-    bonsai_config.update(**args)
-
-    if show:
+    if show and not workspace_id:
         print_profile_information(bonsai_config)
+    else:
+        if not workspace_id:
+            raise_as_click_exception("Workspace ID is required")
+
+        args = {
+            "workspace_id": workspace_id,
+            "tenant_id": tenant_id,
+            "url": "https://cp-api.bons.ai",
+            "gateway_url": "https://api.bons.ai",
+        }
+
+        if bonsai_config.update(**args):
+            click.echo("Successfully configured")
+        else:
+            click.echo("Failed to configure")
+
+        if show:
+            print_profile_information(bonsai_config)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -3428,6 +3653,9 @@ version.add_command(get_inkling)
 version.add_command(start_training)
 version.add_command(stop_training)
 version.add_command(reset_training)
+version.add_command(start_logging)
+version.add_command(stop_logging)
+
 
 version.add_command(start_assessing)
 version.add_command(stop_assessing)

@@ -315,10 +315,10 @@ def raise_as_click_exception(*args: Any):
 
     if args and len(args) == 1:
         raise CustomClickException('An error occurred\n'
-                                       'DETAILS {}'.format(str(args[0])),
+                                       '{}'.format(str(args[0])),
                                        color=color)
     elif args and len(args) > 1:
-        raise CustomClickException("{}\nDETAILS {}".format(args[0], args[1]),
+        raise CustomClickException("{}\n{}".format(args[0], args[1]),
                                    color=color)
     else:
         raise CustomClickException("An error occurred", color=color)

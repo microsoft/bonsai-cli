@@ -15,10 +15,6 @@ from msal import PublicClientApplication
 from msal_extensions import TokenCache
 from requests.exceptions import (ConnectionError)
 
-# turns on msal debugging
-# import logging
-# logging.basicConfig(level=logging.DEBUG)
-
 log = Logger()
 
 # Documentation on AAD configuration:
@@ -47,7 +43,7 @@ class AADClient(object):
         # cache file should be written to home directory
         home = os.path.expanduser('~')
         if home:
-            self._cache_file = os.path.join(home, '.bonsaicache')
+            self._cache_file = os.path.join(home, '.microsoftbonsaicache')
         else:
             raise RuntimeError('Unable to find home directory.')
         self.cache = TokenCache(self._cache_file)

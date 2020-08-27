@@ -14,22 +14,6 @@ class BonsaiClientError(Exception):
         super(BonsaiClientError, self).__init__("{}: {}".format(msg, repr(e)))
         self.original_exception = e
 
-
-class SimulateError(BonsaiClientError):
-    def __init__(self, e: str):
-        super(SimulateError, self).__init__("Error in simulate", e)
-
-
-class EpisodeStartError(BonsaiClientError):
-    def __init__(self, e: str):
-        super(EpisodeStartError, self).__init__("Error in episode_start", e)
-
-
-class EpisodeFinishError(BonsaiClientError):
-    def __init__(self, e: str):
-        super(EpisodeFinishError, self).__init__("Error in episode_finish", e)
-
-
 class AuthenticationError(BonsaiClientError):
     def __init__(self, e: Any):
         super(AuthenticationError, self).__init__("Error authenticating user",
