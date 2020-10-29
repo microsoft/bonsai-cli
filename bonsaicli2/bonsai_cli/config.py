@@ -9,7 +9,7 @@ __copyright__ = "Copyright 2019, Microsoft Corp."
 import sys
 import os
 from configparser import RawConfigParser, NoSectionError
-from os.path import expanduser, join, splitext
+from os.path import expanduser, join
 from argparse import ArgumentParser
 
 from typing import Any, List, Optional
@@ -17,58 +17,54 @@ from urllib.parse import urlparse
 
 from .logger import Logger
 from .aad import AADClient
-from .exceptions import AuthenticationError
 
 import click
 
 log = Logger()
 
 # .bonsaiconfig config file keys
-_DEFAULT = 'DEFAULT'
-_ACCESSKEY = 'accesskey'
-_WORKSPACEID = 'workspace_id'
-_TENANTID = 'tenant_id'
-_URL = 'url'
-_GATEWAYURL = 'gateway_url'
-_PROFILE = 'profile'
-_USE_COLOR = 'use_color'
+_DEFAULT = "DEFAULT"
+_ACCESSKEY = "accesskey"
+_WORKSPACEID = "workspace_id"
+_TENANTID = "tenant_id"
+_URL = "url"
+_GATEWAYURL = "gateway_url"
+_PROFILE = "profile"
+_USE_COLOR = "use_color"
 
 # Default bonsai api url
-_DEFAULT_URL = 'https://api.bons.ai'
+_DEFAULT_URL = "https://api.bons.ai"
 
 # file names
-_DOT_BONSAI = '.bonsaiconfig'
+_DOT_BONSAI = ".bonsaiconfig"
 
 # CLI help strings
-_ACCESS_KEY_HELP = \
-    'The access key to use when connecting to the BRAIN server. If ' \
-    'specified, it will be used instead of any access key' \
-    'information stored in a bonsai config file.'
-_AAD_HELP = 'Use Azure Active Directory authentication if no accesskey is set.'
-_WORKSPACE_ID_HELP = 'Azure workspace id.'
-_TENANT_ID_HELP = 'Azure tenant id.'
-_URL_HELP = \
-    'Bonsai server URL. The URL should be of the form ' \
-    '"https://api.bons.ai"'
-_GATEWAY_URL_HELP = \
-    'Bonsai server gateway URL. The URL should be of the form ' \
-    '"https://api.bons.ai"'
+_ACCESS_KEY_HELP = (
+    "The access key to use when connecting to the BRAIN server. If "
+    "specified, it will be used instead of any access key"
+    "information stored in a bonsai config file."
+)
+_AAD_HELP = "Use Azure Active Directory authentication if no accesskey is set."
+_WORKSPACE_ID_HELP = "Azure workspace id."
+_TENANT_ID_HELP = "Azure tenant id."
+_URL_HELP = "Bonsai server URL. The URL should be of the form " '"https://api.bons.ai"'
+_GATEWAY_URL_HELP = (
+    "Bonsai server gateway URL. The URL should be of the form " '"https://api.bons.ai"'
+)
 _VERBOSE_HELP = "Enables logging. Alias for --log=all"
-_PERFORMANCE_HELP = \
-    "Enables time delta logging. Alias for --log=perf.all"
-_LOG_HELP = \
-    """
+_PERFORMANCE_HELP = "Enables time delta logging. Alias for --log=perf.all"
+_LOG_HELP = """
     Enable logging. Parameters are a list of log domains.
     Using --log=all will enable all domains.
     Using --log=none will disable logging.
     """
-_RECORD_HELP = \
-    """
+_RECORD_HELP = """
     Enable record simulation data to a file (current) or
     external service (not yet implemented).
     Parameter is the target file for recorded data. Data format will be
     inferred from the file extension. Currently supports ".json" and ".csv".
     """
+
 
 class Config(object):
     """
@@ -91,10 +87,10 @@ class Config(object):
         url:           URL of the server to connect to.
                         (Example: "https://api.bons.ai")
     """
-    def __init__(self,
-                 argv: List[str] = sys.argv,
-                 profile: Any = None,
-                 use_aad: bool = False):
+
+    def __init__(
+        self, argv: List[str] = sys.argv, profile: Any = None, use_aad: bool = False
+    ):
         """
         Construct Config object with program arguments.
         Pass in sys.argv for command-line arguments and an
@@ -105,6 +101,7 @@ class Config(object):
             profile: The name of a profile to select. (optional)
             use_aad: Use AAD authentication
         """
+        self.aad_client = None
         self.accesskey = None
         self.workspace_id = None
         self.tenant_id = None
@@ -125,40 +122,27 @@ class Config(object):
         self._parse_config(profile)
         self._parse_args(argv)
 
-        self.aad_client = AADClient(self.tenant_id)
-        self.accesskey = self.aad_client.get_access_token()
+        if use_aad:
+            self.aad_client = AADClient(self.tenant_id)
+            self.accesskey = self.aad_client.get_access_token()
 
     def __repr__(self):
         """ Prints out a JSON formatted string of the Config state. """
-        return '{{'\
-            '\"profile\": \"{self.profile!r}\", ' \
-            '\"accesskey\": \"{self.accesskey!r}\", ' \
-            '\"workspace_id\": \"{self.workspace_id!r}\", ' \
-            '\"tenant_id\": \"{self.tenant_id!r}\", ' \
-            '\"url\": \"{self.url!r}\", ' \
-            '\"gateway_url\": \"{self.gateway_url!r}\", ' \
-            '\"use_color\": \"{self.use_color!r}\", ' \
-            '\"use_aad\": \"{self.use_aad!r}\", ' \
-            '}}'.format(self=self)
-
-    @property
-    def record_format(self):
-        """ The log record format, as inferred from the extension of
-        the log filename"""
-        if self.record_file:
-            _, fmt = splitext(self.record_file)
-            return fmt
-        else:
-            return None
-
-    def refresh_access_token(self):
-        if self.aad_client:
-            self.accesskey = self.aad_client.get_access_token()
-            if not self.accesskey:
-                raise AuthenticationError('Could not refresh AAD bearer token.')
+        return (
+            "{{"
+            '"profile": "{self.profile!r}", '
+            '"accesskey": "{self.accesskey!r}", '
+            '"workspace_id": "{self.workspace_id!r}", '
+            '"tenant_id": "{self.tenant_id!r}", '
+            '"url": "{self.url!r}", '
+            '"gateway_url": "{self.gateway_url!r}", '
+            '"use_color": "{self.use_color!r}", '
+            '"use_aad": "{self.use_aad!r}", '
+            "}}".format(self=self)
+        )
 
     def _parse_config(self, profile: Optional[str]):
-        ''' parse both the '~/.bonsaiconfig' and './.bonsaiconfig' config files. '''
+        """ parse both the '~/.bonsaiconfig' and './.bonsaiconfig' config files. """
 
         # read the values
         def assign_key(key: str):
@@ -189,30 +173,27 @@ class Config(object):
             self.url = _DEFAULT_URL
         elif not urlparse(self.url).scheme:
             # if no url scheme is supplied, assume https
-            self.url = 'https://{}'.format(self.url)
+            self.url = "https://{}".format(self.url)
 
     def _parse_args(self, argv: List[str]):
-        ''' parser command line arguments '''
+        """ parser command line arguments """
         if sys.version_info >= (3, 0):
             parser = ArgumentParser(allow_abbrev=False)
         else:
             parser = ArgumentParser()
 
+        parser.add_argument("--accesskey", "--access-key", help=_ACCESS_KEY_HELP)
+        parser.add_argument("--workspace_id", help=_WORKSPACE_ID_HELP)
+        parser.add_argument("--tenant_id", help=_TENANT_ID_HELP)
+        parser.add_argument("--url", help=_URL_HELP)
+        parser.add_argument("--gateway_url", help=_GATEWAY_URL_HELP)
+        parser.add_argument("--aad", action="store_true", help=_AAD_HELP)
+        parser.add_argument("--verbose", action="store_true", help=_VERBOSE_HELP)
         parser.add_argument(
-            '--accesskey', '--access-key', help=_ACCESS_KEY_HELP)
-        parser.add_argument('--workspace_id', help=_WORKSPACE_ID_HELP)
-        parser.add_argument('--tenant_id', help=_TENANT_ID_HELP)
-        parser.add_argument('--url', help=_URL_HELP)
-        parser.add_argument('--gateway_url', help=_GATEWAY_URL_HELP)
-        parser.add_argument('--aad', action='store_true',
-                            help=_AAD_HELP)
-        parser.add_argument('--verbose', action='store_true',
-                            help=_VERBOSE_HELP)
-        parser.add_argument('--performance', action='store_true',
-                            help=_PERFORMANCE_HELP)
-        parser.add_argument('--log', nargs='+', help=_LOG_HELP)
-        parser.add_argument('--record', nargs=1, default=None,
-                            help=_RECORD_HELP)
+            "--performance", action="store_true", help=_PERFORMANCE_HELP
+        )
+        parser.add_argument("--log", nargs="+", help=_LOG_HELP)
+        parser.add_argument("--record", nargs=1, default=None, help=_RECORD_HELP)
 
         args, remainder = parser.parse_known_args(argv[1:])
 
@@ -255,7 +236,7 @@ class Config(object):
             pass
 
     def _config_files(self):
-        return [join(expanduser('~'), _DOT_BONSAI), join('.', _DOT_BONSAI)]
+        return [join(expanduser("~"), _DOT_BONSAI), join(".", _DOT_BONSAI)]
 
     def _read_config(self):
         # verify that at least one of the config files exists
@@ -283,20 +264,19 @@ class Config(object):
         # Set profile in class and config
         self.profile = section
         if section == _DEFAULT:
-            self._config_parser.set(_DEFAULT, _PROFILE, 'DEFAULT')
+            self._config_parser.set(_DEFAULT, _PROFILE, "DEFAULT")
         else:
             self._config_parser.set(_DEFAULT, _PROFILE, str(section))
 
     def _write_dot_bonsaiconfig(self):
         """ Writes to .bonsaiconfig in users home directory """
-        config_path = join(expanduser('~'), _DOT_BONSAI)
+        config_path = join(expanduser("~"), _DOT_BONSAI)
         try:
-            with open(config_path, 'w') as f:
+            with open(config_path, "w") as f:
                 self._config_parser.write(f)
                 return True
         except (FileNotFoundError, PermissionError):
-            click.echo('Error: Unable to write .bonsaiconfig to {}'.format(
-                config_path))
+            click.echo("Error: Unable to write .bonsaiconfig to {}".format(config_path))
             return False
 
     def has_section(self, section: str):

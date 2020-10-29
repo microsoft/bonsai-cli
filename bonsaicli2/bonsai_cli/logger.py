@@ -9,6 +9,7 @@ import sys
 from time import time
 from typing import Any, Callable, Optional
 
+
 class Logger:
     """
     Entry point for runtime logging to custom and predefined domains.
@@ -20,7 +21,6 @@ class Logger:
     Example Usage:
 
     ```
-    from bonsai_ai.logger import Logger
 
     log = Logger()
 
@@ -36,10 +36,7 @@ class Logger:
 
     def __init__(self):
         if self._impl is None:
-            self._enabled_keys = {
-                'error': True,
-                'info':  True
-            }
+            self._enabled_keys = {"error": True, "info": True}
             self._enable_all = False
             self.__class__._impl = self.__dict__
         else:
@@ -49,8 +46,9 @@ class Logger:
         if self._enable_all or self._enabled_keys.get(attr, False):
             ts = datetime.fromtimestamp(time()).strftime("%Y-%m-%d %H:%M:%S")
 
-            return lambda msg:  \
-                sys.stderr.write("[{0}][{1}] {2}\n".format(ts, attr, msg))
+            return lambda msg: sys.stderr.write(
+                "[{0}][{1}] {2}\n".format(ts, attr, msg)
+            )
         else:
             return lambda msg: None
 
@@ -62,7 +60,7 @@ class Logger:
             key: `string`
             enable: `bool`
         """
-        self.__class__._impl['_enabled_keys'][key] = enable
+        self.__class__._impl["_enabled_keys"][key] = enable
 
     def set_enable_all(self, enable_all: bool):
         """
@@ -76,4 +74,4 @@ class Logger:
         Arguments:
             enable_all: `bool`
         """
-        self.__class__._impl['_enable_all'] = enable_all
+        self.__class__._impl["_enable_all"] = enable_all

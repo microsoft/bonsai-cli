@@ -23,30 +23,32 @@ from json import decoder
 
 log = Logger()
 
+
 def api(use_aad: bool):
     """
     Convenience function for creating and returning an API object.
     :return: An API object.
     """
-    bonsai_config = Config(argv=sys.argv,
-                           use_aad=use_aad)
+    bonsai_config = Config(argv=sys.argv, use_aad=use_aad)
     verify_required_configuration(bonsai_config)
 
-    return BonsaiAPI(access_key=bonsai_config.accesskey,
-                     workspace_id=bonsai_config.workspace_id,
-                     tenant_id=bonsai_config.tenant_id,
-                     api_url=bonsai_config.url,
-                     gateway_url=bonsai_config.gateway_url
-                     )
+    return BonsaiAPI(
+        access_key=bonsai_config.accesskey,
+        workspace_id=bonsai_config.workspace_id,
+        tenant_id=bonsai_config.tenant_id,
+        api_url=bonsai_config.url,
+        gateway_url=bonsai_config.gateway_url,
+    )
+
 
 def click_echo(text: str, fg: Optional[str] = None, bg: Optional[str] = None):
     """
-     Wraps click.echo to print in color if color is enabled in config
-     Currently only supports color printing. Update this function if you
-     wish to add blinking, underline, reverse, and etc...
+    Wraps click.echo to print in color if color is enabled in config
+    Currently only supports color printing. Update this function if you
+    wish to add blinking, underline, reverse, and etc...
 
-     param fg: foreground color,
-     param bg: background color
+    param fg: foreground color,
+    param bg: background color
     """
     try:
         config = Config(argv=sys.argv, use_aad=False)
@@ -59,6 +61,18 @@ def click_echo(text: str, fg: Optional[str] = None, bg: Optional[str] = None):
     else:
         click.echo(text)
 
+
+def get_version_checker(ctx: click.Context, interactive: bool):
+    """
+    param ctx: Click context
+    param interactive: True if the caller is interactive
+    """
+    if ctx.obj["VERSION_CHECK"] and interactive:
+        return AsyncCliVersionChecker()
+    else:
+        return NullCliVersionChecker()
+
+
 class CliVersionCheckerInterface(object):
     """
     Checks the latest CLI version.
@@ -67,8 +81,10 @@ class CliVersionCheckerInterface(object):
     unnecessary to spam version upgrades when commands are failing to run.
     """
 
-    def check_cli_version(self, wait: bool = False, print_up_to_date: bool = True) -> None:
-        raise NotImplementedError('check_cli_version not implemented')
+    def check_cli_version(
+        self, wait: bool = False, print_up_to_date: bool = True
+    ) -> None:
+        raise NotImplementedError("check_cli_version not implemented")
 
 
 class AsyncCliVersionChecker(CliVersionCheckerInterface):
@@ -120,48 +136,61 @@ class AsyncCliVersionChecker(CliVersionCheckerInterface):
         user_cli_version = __version__
 
         if not pypi_version:
-            click_echo('You are using bonsai-cli version ' + user_cli_version,
-                       fg='yellow')
             click_echo(
-                'Unable to connect to PyPi and determine if CLI is up to date.',
-                fg='red')
+                "You are using bonsai-cli version " + user_cli_version, fg="yellow"
+            )
+            click_echo(
+                "Unable to connect to PyPi and determine if CLI is up to date.",
+                fg="red",
+            )
             if isinstance(err, requests.exceptions.SSLError):
                 click_echo(
-                    'The following SSL error occurred while attempting to obtain'
-                    ' the version information from PyPi. \n\n{}\n\n'.format(err) +
-                    'SSL errors are usually a result of an out of date version of'
-                    ' OpenSSL and/or certificates that may need to be updated.'
-                    ' We recommend updating your python install to a more'
-                    ' recent version. If this is not possible, \'pip install'
-                    ' requests[security]\' may fix the problem.',
-                    fg='red')
+                    "The following SSL error occurred while attempting to obtain"
+                    " the version information from PyPi. \n\n{}\n\n".format(err)
+                    + "SSL errors are usually a result of an out of date version of"
+                    " OpenSSL and/or certificates that may need to be updated."
+                    " We recommend updating your python install to a more"
+                    " recent version. If this is not possible, 'pip install"
+                    " requests[security]' may fix the problem.",
+                    fg="red",
+                )
             elif err:
                 click_echo(
-                    'The following error occurred while attempting to obtain the'
-                    ' version information from PyPi.\n\n{}\n'.format(err),
-                    fg='red')
+                    "The following error occurred while attempting to obtain the"
+                    " version information from PyPi.\n\n{}\n".format(err),
+                    fg="red",
+                )
         elif user_cli_version != pypi_version:
-            click_echo('You are using bonsai-cli version ' + user_cli_version,
-                       fg='yellow')
-            click_echo('Bonsai update available. The most recent version is ' +
-                       pypi_version + '.', fg='yellow')
             click_echo(
-                'Upgrade via pip using \'pip install --upgrade bonsai-cli\'',
-                fg='yellow')
+                "You are using bonsai-cli version " + user_cli_version, fg="yellow"
+            )
+            click_echo(
+                "Bonsai update available. The most recent version is "
+                + pypi_version
+                + ".",
+                fg="yellow",
+            )
+            click_echo(
+                "Upgrade via pip using 'pip install --upgrade bonsai-cli'", fg="yellow"
+            )
         elif print_up_to_date:
-            click_echo('You are using bonsai-cli version ' + user_cli_version +
-                       ', Everything is up to date.', fg='green')
+            click_echo(
+                "You are using bonsai-cli version "
+                + user_cli_version
+                + ", Everything is up to date.",
+                fg="green",
+            )
 
     def _query_version(self):
-        log.debug('Checking latest CLI version...')
+        log.debug("Checking latest CLI version...")
         start_time = timeit.default_timer()
 
-        pypi_url = 'https://pypi.org/pypi/bonsai-cli/json'
+        pypi_url = "https://pypi.org/pypi/bonsai-cli/json"
         pypi_version = get_pypi_version(pypi_url)
 
         end_time = timeit.default_timer()
         elapsed = end_time - start_time
-        log.debug('Checked latest CLI version in {} seconds.'.format(elapsed))
+        log.debug("Checked latest CLI version in {} seconds.".format(elapsed))
 
         return pypi_version
 
@@ -176,7 +205,7 @@ class AsyncCliVersionChecker(CliVersionCheckerInterface):
         try:
             pypi_version = self._result.get(timeout)
         except multiprocessing.TimeoutError:
-            log.debug('CLI version check has not completed')
+            log.debug("CLI version check has not completed")
         except requests.exceptions.SSLError as e:
             err = e
         except requests.exceptions.RequestException as e:
@@ -192,12 +221,15 @@ class NullCliVersionChecker(CliVersionCheckerInterface):
     Performs no CLI version checking, does nothing.
     """
 
-    def check_cli_version(self, wait: bool = False, print_up_to_date: bool = True) -> None:
+    def check_cli_version(
+        self, wait: bool = False, print_up_to_date: bool = True
+    ) -> None:
         pass
 
 
 class CustomClickException(click.ClickException):
     """ Custom click exception that prints exceptions in color """
+
     def __init__(self, message: str, color: bool):
         click.ClickException.__init__(self, message)
         self.color = color
@@ -208,10 +240,9 @@ class CustomClickException(click.ClickException):
             file = get_text_stderr()
 
         if self.color:
-            click.secho(
-                'Error: %s' % self.format_message(), file=file, fg='red')
+            click.secho("Error: %s" % self.format_message(), file=file, fg="red")
         else:
-            click.echo('Error: %s' % self.format_message(), file=file)
+            click.echo("Error: %s" % self.format_message(), file=file)
 
 
 def get_pypi_version(pypi_url: str):
@@ -224,19 +255,18 @@ def get_pypi_version(pypi_url: str):
     """
     pkg_request = requests.get(pypi_url)
     pkg_json = pkg_request.json()
-    pypi_version = pkg_json['info']['version']
+    pypi_version = pkg_json["info"]["version"]
     return pypi_version
+
 
 def list_profiles(config: Config):
     """
-      Lists available profiles from configuration
+    Lists available profiles from configuration
 
-      param config: Bonsai_ai.Config
+    param config: Bonsai_ai.Config
     """
     profile: Optional[str] = config.profile
-    click.echo(
-        "\nBonsai configuration file(s) found at {}".format(
-            config.file_paths))
+    click.echo("\nBonsai configuration file(s) found at {}".format(config.file_paths))
     click.echo("\nAvailable Profiles:")
     if profile:
         if profile == "DEFAULT":
@@ -263,9 +293,7 @@ def print_profile_information(config: Config):
     except NoSectionError:
         profile_info = config.defaults().items()
 
-    click.echo(
-        "\nBonsai configuration file(s) found at {}".format(
-            config.file_paths))
+    click.echo("\nBonsai configuration file(s) found at {}".format(config.file_paths))
     click.echo("\nProfile Information")
     click.echo("--------------------")
     if profile_info:
@@ -274,29 +302,33 @@ def print_profile_information(config: Config):
     else:
         click.echo("No profiles found please run 'bonsai configure'.")
 
-def raise_brain_server_error_as_click_exception(debug: bool = False, output: Optional[str] = None, test: bool=False, *args: Any):
+
+def raise_brain_server_error_as_click_exception(
+    debug: bool = False, output: Optional[str] = None, test: bool = False, *args: Any
+):
     try:
         config = Config(argv=sys.argv, use_aad=False)
         color = config.use_color
     except ValueError:
         color = False
 
-    if output == 'json':
+    if output == "json":
 
         message = {
-            'status': args[0].exception['status'],
-            'statusCode': args[0].exception['statusCode'],
-            'statusMessage': args[0].exception['errorDump']
+            "status": args[0].exception["status"],
+            "statusCode": args[0].exception["statusCode"],
+            "statusMessage": args[0].exception["errorDump"],
         }
 
         if test:
-            message['elapsed'] = str(args[0].exception['elapsed'])
-            message['timeTaken'] = str(args[0].exception['timeTaken'])
+            message["elapsed"] = str(args[0].exception["elapsed"])
+            message["timeTaken"] = str(args[0].exception["timeTaken"])
 
     else:
-        message = args[0].exception['errorDump']
+        message = args[0].exception["errorDump"]
 
     raise CustomClickException(str(message), color=color)
+
 
 def raise_as_click_exception(*args: Any):
     """This function raises a ClickException with a message that contains
@@ -314,19 +346,19 @@ def raise_as_click_exception(*args: Any):
         color = False
 
     if args and len(args) == 1:
-        raise CustomClickException('An error occurred\n'
-                                       '{}'.format(str(args[0])),
-                                       color=color)
+        raise CustomClickException(
+            "An error occurred\n" "{}".format(str(args[0])), color=color
+        )
     elif args and len(args) > 1:
-        raise CustomClickException("{}\n{}".format(args[0], args[1]),
-                                   color=color)
+        raise CustomClickException("{}\n{}".format(args[0], args[1]), color=color)
     else:
         raise CustomClickException("An error occurred", color=color)
 
 
-def raise_unique_constraint_violation_as_click_exception(debug: bool, output: str, type: str, name: str, test: bool=False, *args: Any):
-    """This function raises a ClickException with a message that the specified object type already exists
-    """
+def raise_unique_constraint_violation_as_click_exception(
+    debug: bool, output: str, type: str, name: str, test: bool = False, *args: Any
+):
+    """This function raises a ClickException with a message that the specified object type already exists"""
     try:
         config = Config(argv=sys.argv, use_aad=False)
         color = config.use_color
@@ -334,41 +366,57 @@ def raise_unique_constraint_violation_as_click_exception(debug: bool, output: st
         color = False
 
     if debug:
-        if output=='json':
+        if output == "json":
 
             message = {
-                'status': args[0].exception['status'],
-                'statusCode': args[0].exception['statusCode'],
-                'statusMessage': '{}\n{}\n{}'.format(args[0].exception['exception'], args[0].exception['errorCode'], args[0].exception['errorMessage'])
+                "status": args[0].exception["status"],
+                "statusCode": args[0].exception["statusCode"],
+                "statusMessage": "{}\n{}\n{}".format(
+                    args[0].exception["exception"],
+                    args[0].exception["errorCode"],
+                    args[0].exception["errorMessage"],
+                ),
             }
 
             if test:
-                message['elapsed'] = str(args[0].exception['elapsed'])
-                message['timeTaken'] = str(args[0].exception['timeTaken'])
+                message["elapsed"] = str(args[0].exception["elapsed"])
+                message["timeTaken"] = str(args[0].exception["timeTaken"])
 
         else:
-            message = '{}\n{}\n{}'.format(args[0].exception['exception'], args[0].exception['errorCode'], args[0].exception['errorMessage'])
+            message = "{}\n{}\n{}".format(
+                args[0].exception["exception"],
+                args[0].exception["errorCode"],
+                args[0].exception["errorMessage"],
+            )
 
     else:
-        if output=='json':
+        if output == "json":
             message = {
-                'status': args[0].exception['status'],
-                'statusCode': args[0].exception['statusCode'],
-                'statusMessage': "{} '{}' already exists".format(type, name)
+                "status": args[0].exception["status"],
+                "statusCode": args[0].exception["statusCode"],
+                "statusMessage": "{} '{}' already exists".format(type, name),
             }
 
             if test:
-                message['elapsed'] = str(args[0].exception['elapsed'])
-                message['timeTaken'] = str(args[0].exception['timeTaken'])
+                message["elapsed"] = str(args[0].exception["elapsed"])
+                message["timeTaken"] = str(args[0].exception["timeTaken"])
 
         else:
             message = "{} '{}' already exists".format(type, name)
 
     raise CustomClickException(str(message), color=color)
 
-def raise_not_found_as_click_exception(debug: bool, output: str, operation:str, type: str, name: str, test: bool = False, *args: Any):
-    """This function raises a ClickException with a message that the specified object does not exist
-    """
+
+def raise_not_found_as_click_exception(
+    debug: bool,
+    output: str,
+    operation: str,
+    type: str,
+    name: str,
+    test: bool = False,
+    *args: Any
+):
+    """This function raises a ClickException with a message that the specified object does not exist"""
     try:
         config = Config(argv=sys.argv, use_aad=False)
         color = config.use_color
@@ -376,41 +424,54 @@ def raise_not_found_as_click_exception(debug: bool, output: str, operation:str, 
         color = False
 
     if debug:
-        if output == 'json':
+        if output == "json":
 
             message = {
-                'status': args[0].exception['status'],
-                'statusCode': args[0].exception['statusCode'],
-                'statusMessage': '{}\n{}\n{}'.format(args[0].exception['exception'], args[0].exception['errorCode'],
-                                                     args[0].exception['errorMessage'])
+                "status": args[0].exception["status"],
+                "statusCode": args[0].exception["statusCode"],
+                "statusMessage": "{}\n{}\n{}".format(
+                    args[0].exception["exception"],
+                    args[0].exception["errorCode"],
+                    args[0].exception["errorMessage"],
+                ),
             }
 
             if test:
-                message['elapsed'] = str(args[0].exception['elapsed'])
-                message['timeTaken'] = str(args[0].exception['timeTaken'])
+                message["elapsed"] = str(args[0].exception["elapsed"])
+                message["timeTaken"] = str(args[0].exception["timeTaken"])
         else:
-            message = '{}\n{}\n{}'.format(args[0].exception['exception'], args[0].exception['errorCode'],
-                                          args[0].exception['errorMessage'])
+            message = "{}\n{}\n{}".format(
+                args[0].exception["exception"],
+                args[0].exception["errorCode"],
+                args[0].exception["errorMessage"],
+            )
 
     else:
-        if output == 'json':
+        if output == "json":
             message = {
-                'status': args[0].exception['status'],
-                'statusCode': args[0].exception['statusCode'],
-                'statusMessage': "{} '{}' not found".format(type, name)
+                "status": args[0].exception["status"],
+                "statusCode": args[0].exception["statusCode"],
+                "statusMessage": "{} '{}' not found".format(type, name),
             }
 
             if test:
-                message['elapsed'] = str(args[0].exception['elapsed'])
-                message['timeTaken'] = str(args[0].exception['timeTaken'])
+                message["elapsed"] = str(args[0].exception["elapsed"])
+                message["timeTaken"] = str(args[0].exception["timeTaken"])
         else:
             message = "{} '{}' not found".format(type, name)
 
     raise CustomClickException(str(message), color=color)
 
-def raise_client_side_click_exception(debug: bool, output: str, test: bool, status_code: int, status_message: str, response: Any):
-    """This function raises a ClickException that is generated on client side
-    """
+
+def raise_client_side_click_exception(
+    debug: bool,
+    output: str,
+    test: bool,
+    status_code: int,
+    status_message: str,
+    response: Any,
+):
+    """This function raises a ClickException that is generated on client side"""
     try:
         config = Config(argv=sys.argv, use_aad=False)
         color = config.use_color
@@ -418,35 +479,36 @@ def raise_client_side_click_exception(debug: bool, output: str, test: bool, stat
         color = False
 
     if debug:
-        if output == 'json':
+        if output == "json":
 
             message = {
-                'status': "Failed",
-                'statusCode': status_code,
-                'statusMessage': status_message
+                "status": "Failed",
+                "statusCode": status_code,
+                "statusMessage": status_message,
             }
 
             if test:
-                message['elapsed'] = response['elapsed']
-                message['timeTaken'] = response['timeTaken']
+                message["elapsed"] = response["elapsed"]
+                message["timeTaken"] = response["timeTaken"]
         else:
             message = status_message
 
     else:
-        if output == 'json':
+        if output == "json":
             message = {
-                'status': "Failed",
-                'statusCode': status_code,
-                'statusMessage': status_message
+                "status": "Failed",
+                "statusCode": status_code,
+                "statusMessage": status_message,
             }
 
             if test:
-                message['elapsed'] = response['elapsed']
-                message['timeTaken'] = response['timeTaken']
+                message["elapsed"] = response["elapsed"]
+                message["timeTaken"] = response["timeTaken"]
         else:
             message = status_message
 
     raise CustomClickException(str(message), color=color)
+
 
 def verify_required_configuration(bonsai_config: Config):
     """This function verifies that the user's configuration contains
@@ -457,7 +519,7 @@ def verify_required_configuration(bonsai_config: Config):
     messages = []
     missing_config = False
 
-    if (not bonsai_config.use_aad and not bonsai_config.accesskey):
+    if not bonsai_config.use_aad and not bonsai_config.accesskey:
         messages.append("Your access key is not configured.")
         missing_config = True
 
@@ -466,6 +528,5 @@ def verify_required_configuration(bonsai_config: Config):
         missing_config = True
 
     if missing_config:
-        messages.append(
-            "Run 'bonsai configure' to update required configuration.")
+        messages.append("Run 'bonsai configure' to update required configuration.")
         raise click.ClickException("\n".join(messages))
