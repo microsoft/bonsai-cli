@@ -1060,7 +1060,7 @@ def stop_training(
     "--workspace-id",
     "-w",
     type=str,
-    help="[Required] Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
+    help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
 )
 @click.option(
     "--managed-simulator",
@@ -1183,7 +1183,7 @@ def start_logging(
 @click.option(
     "--workspace-id",
     "-w",
-    help="[Required] Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
+    help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
 )
 @click.option(
     "--managed-simulator",

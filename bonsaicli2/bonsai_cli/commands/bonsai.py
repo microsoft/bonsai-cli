@@ -100,9 +100,9 @@ def configure(
 ):
     version_checker = get_version_checker(ctx, interactive=True)
 
-    bonsai_config = Config(use_aad=True)
-
     if show and not workspace_id:
+        bonsai_config = Config(use_aad=False)
+
         print_profile_information(bonsai_config)
     else:
         if not workspace_id:
@@ -112,6 +112,8 @@ def configure(
 
         if os.path.exists(cache_file):
             os.remove(cache_file)
+
+        bonsai_config = Config(use_aad=True)
 
         args = {
             "workspace_id": workspace_id,
