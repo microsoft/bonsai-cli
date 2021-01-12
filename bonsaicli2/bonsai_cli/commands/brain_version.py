@@ -8,9 +8,10 @@ import click
 from json import dumps
 from tabulate import tabulate
 
-from bonsai_cli.api import BrainServerError
+from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
+    get_latest_brain_version,
     get_version_checker,
     raise_as_click_exception,
     raise_brain_server_error_as_click_exception,
@@ -18,7 +19,8 @@ from bonsai_cli.utils import (
     raise_client_side_click_exception,
 )
 
-from bonsai_cli.exceptions import AuthenticationError
+
+from .assessment import assessment
 
 
 @click.group("version", short_help="Brain version operations.")
@@ -1073,13 +1075,29 @@ def stop_training(
 @click.option(
     "--session-id",
     "-d",
+    type=str,
     help="Identifier for the simulator. This only applies to unmanaged simulators.",
 )
 @click.option(
     "--session-count",
     "-s",
-    default=10,
-    help="Number of simulators to enable logging for. This only applies to managed simulators. Default is 10.",
+    type=int,
+    default=4,
+    help="Number of simulators to enable logging for. This only applies to managed simulators. Default is 4.",
+)
+@click.option(
+    "--include-system-logs",
+    "-l",
+    default=False,
+    is_flag=True,
+    help="Including system logs will collect additional logs from your managed simulators. Please note that this will cause some or all of your managed simulators to restart. This only applies to managed simulators.",
+)
+@click.option(
+    "--yes",
+    "-y",
+    default=False,
+    is_flag=True,
+    help="Do not prompt for confirmation when including system logs.",
 )
 @click.option(
     "--debug", default=False, is_flag=True, help="Verbose logging for request."
@@ -1101,6 +1119,8 @@ def start_logging(
     managed_simulator: bool,
     session_id: str,
     session_count: int,
+    include_system_logs: bool,
+    yes: bool,
     debug: bool,
     output: str,
     test: bool,
@@ -1119,53 +1139,83 @@ def start_logging(
     if not managed_simulator and not session_id:
         raise_as_click_exception("\nFor an unmanaged simulator, session-id is requried")
 
+    if include_system_logs and not managed_simulator:
+        raise_as_click_exception(
+            "\nIncluding system logs is currently only supported for managed simulators"
+        )
+
     if not session_id:
         session_id = "0"
 
-    try:
-        response = api(use_aad=True).start_logging(
-            name,
-            version=version,
-            session_id=session_id,
-            session_count=session_count,
-            workspace=workspace_id,
-            debug=debug,
-        )
-
-    except BrainServerError as e:
-        if e.exception["statusCode"] == 404:
-            raise_not_found_as_click_exception(
-                debug,
-                output,
-                "Start-logging brain version",
-                "Brain '{}' version".format(name),
-                "{}".format(version),
-                test,
-                e,
-            )
-        if "reference" in e.exception["errorMessage"]:
-            raise_as_click_exception(
-                "\nThe simulator is not started yet, please try again later"
-            )
-        else:
-            raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-    except AuthenticationError as e:
-        raise_as_click_exception(e)
-
-    status_message = "{} version {} logging started.".format(name, version)
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
+    if yes or not include_system_logs:
+        is_confirmed = True
     else:
-        click.echo(status_message)
+        is_confirmed = False
+
+    if not is_confirmed and include_system_logs:
+        click.echo(
+            "Including system logs will cause some or all of your managed simulators to restart. Are you sure you want to start logging with system logs for brain {} version {} (y/n?).".format(
+                name, version
+            )
+        )
+        choice = input().lower()
+
+        yes_set = {"yes", "y"}
+        no_set = {"no", "n"}
+
+        if choice in yes_set:
+            is_confirmed = True
+        elif choice in no_set:
+            is_confirmed = False
+        else:
+            raise_as_click_exception("\nPlease respond with 'y' or 'n'")
+
+    if is_confirmed:
+        try:
+            response = api(use_aad=True).start_logging(
+                name,
+                version=version,
+                session_id=session_id,
+                session_count=session_count,
+                include_system_logs=include_system_logs,
+                workspace=workspace_id,
+                debug=debug,
+            )
+
+        except BrainServerError as e:
+            if e.exception["statusCode"] == 404:
+                raise_not_found_as_click_exception(
+                    debug,
+                    output,
+                    "Start-logging brain version",
+                    "Brain '{}' version".format(name),
+                    "{}".format(version),
+                    test,
+                    e,
+                )
+            if "Current simulator count is 0" in e.exception["errorMessage"]:
+                raise_as_click_exception(
+                    "Cannot start logging when no simulators are connected. Connect unmanaged sims, or if you just started training, wait a few minutes and try again."
+                )
+            else:
+                raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+        except AuthenticationError as e:
+            raise_as_click_exception(e)
+
+        status_message = "{} version {} logging started.".format(name, version)
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1698,37 +1748,6 @@ def stop_assessing(
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
-def get_latest_brain_version(
-    name: str, operation: str, debug: bool, output: str, test: bool
-):
-    try:
-        response = api(use_aad=True).list_brain_versions(name)
-
-    except BrainServerError as e:
-        if e.exception["statusCode"] == 404:
-            raise_not_found_as_click_exception(
-                debug,
-                output,
-                operation,
-                "Brain",
-                name,
-                test,
-                e,
-            )
-
-        else:
-            raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-    except AuthenticationError as e:
-        raise_as_click_exception(e)
-
-    brain_versions_desc = sorted(
-        response["value"], key=lambda i: i["version"], reverse=True
-    )
-
-    return brain_versions_desc[0]["version"]
-
-
 version.add_command(create_brain_version)
 version.add_command(show_brain_version)
 version.add_command(update_brain_version)
@@ -1745,3 +1764,4 @@ version.add_command(start_assessing)
 version.add_command(stop_assessing)
 version.add_command(start_logging)
 version.add_command(stop_logging)
+version.add_command(assessment)

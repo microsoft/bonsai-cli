@@ -55,11 +55,14 @@ class CookieConfiguration(object):
     no PII data for the User Id and a Session Id with an expiry.
     """
 
-    def __init__(self):
+    def __init__(self, config_parser: Optional[RawConfigParser] = None):
         self.user_id = None
         self.session_id = SessionId(uuid4())
 
-        self._config_parser = RawConfigParser(allow_no_value=True)
+        if config_parser:
+            self._config_parser = config_parser
+        else:
+            self._config_parser = RawConfigParser(allow_no_value=True)
         self._read_config()
         self._parse_config()
 

@@ -8,16 +8,15 @@ import click
 from json import dumps
 from tabulate import tabulate
 
-from bonsai_cli.api import BrainServerError
-from bonsai_cli.exceptions import AuthenticationError
+from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
+    get_latest_brain_version,
     get_version_checker,
     raise_as_click_exception,
     raise_brain_server_error_as_click_exception,
     raise_not_found_as_click_exception,
 )
-from .brain_version import get_latest_brain_version
 
 
 @click.group()
@@ -410,50 +409,44 @@ def connect_simulator_unmanaged(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        total_simulators = 0
-
-        inactive_simulators = 0
-        active = 0
+        num_simulators = 0
+        num_failures = 0
+        num_successes = 0
         failure_status_code = 500
 
         for sim in response["value"]:
-            if sim["simulatorName"] == simulator_name:
-                total_simulators += 1
+            if sim["simulatorName"] != simulator_name:
+                continue
 
-                if (
-                    sim["simulatorContext"]["purpose"]["action"] == "Train"
-                    or sim["simulatorContext"]["purpose"]["action"] == "Assess"
-                ):
-                    active += 1
+            num_simulators += 1
 
-                if sim["simulatorContext"]["purpose"]["action"] == "Inactive":
-                    try:
-                        api(use_aad=True).patch_sim_session(
-                            session_id=sim["sessionId"],
-                            brain_name=brain_name,
-                            version=brain_version,
-                            purpose_action=action,
-                            concept_name=concept_name,
-                            workspace=workspace_id,
-                            debug=debug,
-                            output=output,
-                        )
+            try:
+                api(use_aad=True).patch_sim_session(
+                    session_id=sim["sessionId"],
+                    brain_name=brain_name,
+                    version=brain_version,
+                    purpose_action=action,
+                    concept_name=concept_name,
+                    workspace=workspace_id,
+                    debug=debug,
+                    output=output,
+                )
 
-                        active += 1
+                num_successes += 1
 
-                    except BrainServerError as e:
-                        if inactive_simulators == 0:
-                            failure_status_code: int = e.exception["statusCode"]
-                        inactive_simulators += 1
+            except BrainServerError as e:
+                if num_failures == 0:
+                    failure_status_code: int = e.exception["statusCode"]
+                num_failures += 1
 
         if output == "json":
             status_message = {
-                "simulatorsFound": total_simulators,
-                "simulatorsConnected": active,
-                "simulatorsNotConnected": inactive_simulators,
+                "simulatorsFound": num_simulators,
+                "simulatorsConnected": num_successes,
+                "simulatorsNotConnected": num_failures,
             }
 
-            if inactive_simulators > 0:
+            if num_failures > 0:
                 json_response = {
                     "status": "Failed",
                     "statusCode": failure_status_code,
@@ -468,55 +461,11 @@ def connect_simulator_unmanaged(
 
             click.echo(dumps(json_response, indent=4))
         else:
-            click.echo("Simulators Found: {}".format(total_simulators))
-            click.echo("Simulators Connected: {}".format(active))
-            click.echo("Simulators Not Connected: {}".format(inactive_simulators))
+            click.echo("Simulators Found: {}".format(num_simulators))
+            click.echo("Simulators Connected: {}".format(num_successes))
+            click.echo("Simulators Not Connected: {}".format(num_failures))
 
     else:
-        try:
-            show_sim_session_response = api(use_aad=True).get_sim_session(
-                session_id=session_id,
-                workspace=workspace_id,
-                debug=debug,
-                output=output,
-            )
-
-        except BrainServerError as e:
-            if e.exception["statusCode"] == 404:
-                raise_not_found_as_click_exception(
-                    debug,
-                    output,
-                    "Connect simulator unmanaged",
-                    "Simulator unmanaged",
-                    session_id,
-                    test,
-                    e,
-                )
-            else:
-                raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-        except AuthenticationError as e:
-            raise_as_click_exception(e)
-
-        if (
-            show_sim_session_response["simulatorContext"]["purpose"]["action"]
-            == "Train"
-            or show_sim_session_response["simulatorContext"]["purpose"]["action"]
-            == "Assess"
-        ):
-            raise_as_click_exception(
-                "Unmanaged simulator with session id {} is already connected to brain {} version {} with action {}".format(
-                    session_id,
-                    show_sim_session_response["simulatorContext"]["purpose"]["target"][
-                        "brainName"
-                    ],
-                    show_sim_session_response["simulatorContext"]["purpose"]["target"][
-                        "brainVersion"
-                    ],
-                    show_sim_session_response["simulatorContext"]["purpose"]["action"],
-                )
-            )
-
         try:
             response = api(use_aad=True).patch_sim_session(
                 session_id=session_id,

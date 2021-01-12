@@ -22,6 +22,17 @@ class AuthenticationError(BonsaiClientError):
         super(AuthenticationError, self).__init__("Error authenticating user", e)
 
 
+class BrainServerError(Exception):
+    """
+    This is thrown for any errors.
+    """
+
+    def __init__(self, exception: Any):
+        self.exception = exception
+
+    pass
+
+
 class RetryTimeoutError(Exception):
     pass
 

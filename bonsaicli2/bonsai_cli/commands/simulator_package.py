@@ -6,11 +6,12 @@ __copyright__ = "Copyright 2020, Microsoft Corp."
 
 import click
 import math
+import os
+import time
 
 from json import dumps
 
-from bonsai_cli.api import BrainServerError
-from bonsai_cli.exceptions import AuthenticationError
+from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
     get_version_checker,
@@ -26,6 +27,65 @@ from bonsai_cli.utils import (
 def package():
     """Simulator package operations."""
     pass
+
+
+"""
+This model file upload command is just for internal usage and hence hidden flag is set to true
+"""
+
+
+@click.command(
+    "upload",
+    short_help="Upload Simulator Package Model file providing the complete file path",
+    hidden=True,
+)
+@click.option(
+    "--modelfilepath", "-m", help="[Required] Model File Path on local system."
+)
+@click.option(
+    "--debug", default=False, is_flag=True, help="Verbose logging for request."
+)
+@click.option("--output", "-o", help="Set output, only json supported.")
+@click.pass_context
+def upload_model_file(
+    ctx: click.Context, modelfilepath: str, debug: bool, output: bool
+):
+
+    version_checker = get_version_checker(ctx, interactive=not output)
+
+    try:
+        tic = time.perf_counter()
+        response = api(use_aad=True).upload_model_file(modelfilepath, debug=debug)
+        toc = time.perf_counter()
+        size = os.path.getsize(modelfilepath)
+        print(
+            "*******************************************************************************************************"
+        )
+        print(
+            f"uploaded {modelfilepath} of size:{size*0.000001} MB in {toc - tic:0.4f} seconds."
+        )
+        print(
+            "*******************************************************************************************************"
+        )
+    except AuthenticationError as e:
+        raise_as_click_exception(e)
+
+    status_message = "Uploaded model file {} successfully.".format(
+        response["uploadedFileName"]
+    )
+
+    if output == "json":
+        json_response = {
+            "uploadedFileName": response["uploadedFileName"],
+            "uploadedFileStoragePath": response["modelFileStoragePath"],
+            "createdTimeStamp": response["createdTimeStamp"],
+            "status": response["status"],
+            "statusCode": response["statusCode"],
+            "statusMessage": status_message,
+        }
+        click.echo(dumps(json_response, indent=4))
+
+    version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 @click.command("add", short_help="Add a simulator package.")
@@ -590,6 +650,7 @@ def remove_simulator_package(
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
+package.add_command(upload_model_file)
 package.add_command(add_simulator_package)
 package.add_command(show_simulator_package)
 package.add_command(update_simulator_package)
