@@ -1,13 +1,14 @@
 """
 This file contains the API code for version 2 of the bonsai command line
 """
-__author__ = "Karthik Sankara Subramanian"
+__author__ = "Karthik Sankara Subramanian, Anil Puvvadi"
 __copyright__ = "Copyright 2019, Microsoft Corp."
 
 import click
 import json
-import sys
+import os
 import pprint
+import sys
 
 from typing import Any, Dict, Optional
 from uuid import uuid4
@@ -28,7 +29,8 @@ from .application_insights import (
     SkeletonApplicationInsightsHandler,
 )
 from .cookies import CookieConfiguration
-from .exceptions import UsageError
+from .exceptions import BrainServerError, UsageError
+from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
 
 _LIST_BRAINS_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains"
 _CREATE_BRAIN_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}"
@@ -55,18 +57,38 @@ _DELETE_BRAIN_VERSION_URL_PATH_TEMPLATE = (
 _START_SIMULATOR_LOGGING_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/simulators/{sessionId}/startLogging"
 _STOP_SIMULATOR_LOGGING_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/simulators/{sessionId}/stopLogging"
 
-_LIST_SIM_PACKAGE_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/simulatorpackages"
-_GET_SIM_PACKAGE_URL_PATH_TEMPLATE = (
-    "/v2/workspaces/{workspacename}/simulatorpackages/{simulatorpackagename}"
+_UPLOAD_MODEL_FILE_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspacename}/packages/uploadmodelfile"
 )
 _CREATE_SIM_PACKAGE_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorpackages/{packagename}"
+)
+_LIST_SIM_PACKAGE_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/simulatorpackages"
+_GET_SIM_PACKAGE_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspacename}/simulatorpackages/{simulatorpackagename}"
 )
 _UPDATE_SIM_PACKAGE_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorpackages/{simulatorpackagename}"
 )
 _DELETE_SIM_PACKAGE_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorpackages/{simulatorpackagename}"
+)
+_UPLOAD_IMPORTED_MODEL_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspacename}/importedModels/uploadmodelfile"
+)
+_CREATE_IMPORTED_MODEL_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspaceid}/importedModels/{importedmodelname}"
+)
+_LIST_IMPORTED_MODEL_URL_PATH_TEMPLATE = "/v2/workspaces/{workspaceid}/importedmodels"
+
+_GET_IMPORTED_MODEL_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspaceid}/importedmodels/{importedmodelname}"
+)
+_UPDATE_IMPORTED_MODEL_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspaceid}/importedmodels/{importedmodelname}"
+)
+_DELETE_IMPORTED_MODEL_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspaceid}/importedmodels/{importedmodelname}"
 )
 
 _LIST_SIM_COLLECTION_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/simulatorpackages/{simulatorpackagename}/simulatorcollections"
@@ -90,14 +112,12 @@ _DELETE_EXPORTED_BRAIN_URL_PATH_TEMPLATE = (
 _UPDATE_EXPORTED_BRAIN_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/exportedBrains/{exportedbrainname}"
 )
-
 _LIST_SIM_BASE_IMAGE_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorbaseimages"
 )
 _GET_SIM_BASE_IMAGE_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorbaseimages/{imageidentifier}"
 )
-
 _RESET_BRAIN_TRAINING_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/resetTraining"
 )
@@ -107,15 +127,12 @@ _START_BRAIN_TRAINING_URL_PATH_TEMPLATE = (
 _STOP_BRAIN_TRAINING_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/stopTraining"
 )
-
 _START_BRAIN_ASSESSMENT_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/startAssessment"
 )
 _STOP_BRAIN_ASSESSMENT_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/stopAssessment"
 )
-
-
 _LIST_SIM_SESSIONS_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorsessions?deployment_mode=neq:Hosted"
 )
@@ -142,21 +159,20 @@ _BRAIN_VERSION_OBJECT = "BrainVersion"
 _ALL_BRAIN_VERSIONS_OBJECT = "BrainVersions"
 _SIMULATOR_PACKAGE_OBJECT = "SimulatorPackage"
 _ALL_SIMULATOR_PACKAGES_OBJECT = "SimulatorPackages"
+_IMPORTED_MODEL_OBJECT = "ImportedModel"
+_ALL_IMPORTED_MODEL_OBJECT = "ImportedModels"
 _SIMULATOR_COLLECTION_OBJECT = "SimulatorCollection"
 _INKLING_OBJECT = "Inkling"
 
+_LIST_ASSESSMENTS_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/assessments"
+)
+_CREATE_ASSESSMENT_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/assessments/{assessmentName}"
+_GET_ASSESSMENT_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/assessments/{assessmentName}"
+_DELETE_ASSESSMENT_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/assessments/{assessmentName}"
+_UPDATE_ASSESSMENT_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/brains/{name}/versions/{version}/assessments/{assessmentName}"
+
 log = Logger()
-
-
-class BrainServerError(Exception):
-    """
-    This is thrown for any errors.
-    """
-
-    def __init__(self, exception: Any):
-        self.exception = exception
-
-    pass
 
 
 def _handle_and_raise(response: requests.Response, e: Any, request_id: str):
@@ -261,6 +277,7 @@ class BonsaiAPI(object):
         tenant_id: Optional[str] = None,
         api_url: Optional[str] = None,
         gateway_url: Optional[str] = None,
+        cookie_config: Optional[CookieConfiguration] = None,
     ):
         """
         Initializes the API object.
@@ -283,7 +300,10 @@ class BonsaiAPI(object):
         if gateway_url is None:
             raise ValueError("Gateway url is missing")
 
-        self.cookie_config = CookieConfiguration()
+        if cookie_config:
+            self.cookie_config = cookie_config
+        else:
+            self.cookie_config = CookieConfiguration()
         self._access_key = access_key
         self._workspace_id = workspace_id
         self.tenant_id = tenant_id
@@ -427,6 +447,14 @@ class BonsaiAPI(object):
                     allow_redirects=False,
                     timeout=self.timeout,
                 )
+            elif http_method == "POST_FILE":
+                response = self._session.post(
+                    url=url,
+                    headers=headers_out,
+                    data=data,
+                    allow_redirects=False,
+                    timeout=self.timeout,
+                )
             else:
                 raise UsageError("Unsupported HTTP Request Method")
 
@@ -475,7 +503,7 @@ class BonsaiAPI(object):
         debug: bool = False,
         output: Optional[str] = None,
         event: Optional[CustomEventInterface] = None,
-    ):
+    ) -> Any:
         """
         Wrapper for _try_http_request(), will switch to AAD authentication
         and retry if first attempt fails due to deprecated Bonsai credentials.
@@ -859,6 +887,192 @@ class BonsaiAPI(object):
         )
 
         return self._delete(url=url, debug=debug, output=output, event=event)
+
+    def upload_model_file(self, filepath: str, debug: bool = False) -> Any:
+
+        url_path = _UPLOAD_MODEL_FILE_URL_PATH_TEMPLATE.format(
+            workspacename=self._workspace_id
+        )
+        url = urljoin(self._api_url, url_path)
+        return self.post_file(
+            url=url,
+            filename=os.path.basename(os.path.normpath(filepath)),
+            filepath=filepath,
+            debug=debug,
+        )
+
+    def upload_importedmodel(
+        self, importedmodelname: str, filepath: str, debug: bool = False
+    ) -> Any:
+
+        url_path = _UPLOAD_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
+            workspacename=self._workspace_id
+        )
+        url = urljoin(self._api_url, url_path)
+        return self.post_file(
+            url=url, filename=importedmodelname, filepath=filepath, debug=debug
+        )
+
+    # callback function to monitor the progress
+    def post_file_callback(self, monitor: MultipartEncoderMonitor):
+        log.info("NUMBER OF BYTES READY FOR UPLOAD: {}".format(monitor.bytes_read))
+
+    # uploads model file in zip format
+    def post_file(
+        self, url: str, filename: str, filepath: str, debug: bool = False
+    ) -> Any:
+
+        multipart_encoder: MultipartEncoder = MultipartEncoder(
+            fields={"file": (filename, open(filepath, "rb"))}
+        )
+        multipart_monitor: Any = MultipartEncoderMonitor(
+            multipart_encoder, self.post_file_callback
+        )
+
+        headers_out = self._get_headers()
+        headers_out.update({"Content-Type": multipart_monitor.content_type})
+        headers_out.update({"RequestId": str(uuid4())})
+        return self._http_request(
+            "POST_FILE",
+            url=url,
+            data=multipart_monitor,
+            headers=headers_out,
+            debug=debug,
+        )
+
+    def create_importedmodel(
+        self,
+        name: str,
+        uploaded_file_path: str,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+
+        log.information("****I am fine***")
+
+        url_path = _CREATE_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
+            workspaceid=workspace if workspace else self._workspace_id,
+            importedmodelname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_CREATE_ACTION, _IMPORTED_MODEL_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_IMPORTED_MODEL_OBJECT],
+        )
+
+        data = {
+            "displayName": display_name,
+            "description": description,
+            "uploadedFilePath": uploaded_file_path,
+        }
+        return self._put(url=url, data=data, debug=debug, output=output, event=event)
+
+    def list_importedmodels(
+        self,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting list of imported models for {}...".format(self._workspace_id)
+        )
+        url_path = _LIST_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
+            workspaceid=workspace if workspace else self._workspace_id
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _ALL_IMPORTED_MODEL_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ALL_IMPORTED_MODEL_OBJECT],
+        )
+
+        return self._get(url=url, debug=debug, output=output, event=event)
+
+    def get_importedmodel(
+        self,
+        name: str,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting details about imported model {} in workspace {}...".format(
+                name, self._workspace_id
+            )
+        )
+
+        url_path = _GET_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
+            workspaceid=workspace if workspace else self._workspace_id,
+            importedmodelname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _IMPORTED_MODEL_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_IMPORTED_MODEL_OBJECT],
+        )
+
+        return self._get(url=url, debug=debug, output=output, event=event)
+
+    def update_importedmodel(
+        self,
+        name: str,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Updating details for imported models {} in workspace {}...".format(
+                name, self._workspace_id
+            )
+        )
+        url_path = _UPDATE_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
+            workspaceid=workspace if workspace else self._workspace_id,
+            importedmodelname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_UPDATE_ACTION, _IMPORTED_MODEL_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_IMPORTED_MODEL_OBJECT],
+        )
+
+        data = {
+            "displayName": display_name,
+            "description": description,
+        }
+        response = self._patch(
+            url=url, data=data, debug=debug, output=output, event=event
+        )
+        return response
+
+    def delete_importedmodel(
+        self,
+        name: str,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug("Deleting imported models {}".format(name))
+        url_path = _DELETE_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
+            workspaceid=workspace if workspace else self._workspace_id,
+            importedmodelname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_DELETE_ACTION, _IMPORTED_MODEL_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_IMPORTED_MODEL_OBJECT],
+        )
+        response = self._delete(url=url, debug=debug, output=output, event=event)
+        return response
 
     def create_sim_package(
         self,
@@ -1269,6 +1483,7 @@ class BonsaiAPI(object):
         name: str,
         session_id: str,
         session_count: int,
+        include_system_logs: bool,
         version: int = 1,
         workspace: Optional[str] = None,
         debug: bool = False,
@@ -1281,7 +1496,7 @@ class BonsaiAPI(object):
             sessionId=session_id,
         )
 
-        data = {"sessionCount": session_count}
+        data = {"sessionCount": session_count, "includeSystemLogs": include_system_logs}
 
         url = urljoin(self._api_url, url_path)
 
@@ -1589,6 +1804,166 @@ class BonsaiAPI(object):
         data = {"purposeOperation": "SetValue", "purpose": purpose}
 
         return self._patch(url=url, data=data, debug=debug, output=output)
+
+    def start_assessmentv2(
+        self,
+        name: str,
+        brain_name: str,
+        version: int,
+        concept_name: str,
+        scenarios: str,
+        episode_iteration_limit: int,
+        maximum_duration_in_minutes: int,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug("Creating a new assessment {}".format(name))
+        url_path = _CREATE_ASSESSMENT_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=brain_name,
+            version=version,
+            assessmentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        data = {
+            "name": name,
+            "concept": concept_name,
+            "scenarios": scenarios,
+            "displayName": display_name,
+            "description": description,
+            "episodeIterationLimit": episode_iteration_limit,
+            "maximumDurationInMinutes": maximum_duration_in_minutes,
+        }
+
+        return self._post(url=url, data=data, debug=debug, output=output)
+
+    def list_assessment(
+        self,
+        brain_name: str,
+        version: int,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting list of assessments for brain {} version {} in workspace...".format(
+                brain_name, version, self._workspace_id
+            )
+        )
+        url_path = _LIST_ASSESSMENTS_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=brain_name,
+            version=version,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        return self._get(url=url, debug=debug, output=output)
+
+    def get_assessment(
+        self,
+        name: str,
+        brain_name: str,
+        version: int,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting details about assessment {} for brain {} version {} in workspace {}...".format(
+                name, brain_name, version, self._workspace_id
+            )
+        )
+
+        url_path = _GET_ASSESSMENT_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=brain_name,
+            version=version,
+            assessmentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        return self._get(url=url, debug=debug, output=output)
+
+    def update_assessment(
+        self,
+        name: str,
+        brain_name: str,
+        version: int,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Updating details about assessment {} for brain {} version {} in workspace {}...".format(
+                name, brain_name, version, self._workspace_id
+            )
+        )
+        url_path = _UPDATE_ASSESSMENT_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=brain_name,
+            version=version,
+            assessmentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        data = {"displayName": display_name, "description": description}
+        return self._put(url=url, data=data, debug=debug, output=output)
+
+    def stop_assessment_v2(
+        self,
+        name: str,
+        brain_name: str,
+        version: int,
+        state: Optional[str] = None,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Updating details about assessment {} for brain {} version {} in workspace {}...".format(
+                name, brain_name, version, self._workspace_id
+            )
+        )
+        url_path = _UPDATE_ASSESSMENT_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=brain_name,
+            version=version,
+            assessmentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        data = {"state": state}
+        return self._put(url=url, data=data, debug=debug, output=output)
+
+    def delete_assessment(
+        self,
+        name: str,
+        brain_name: str,
+        version: int,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Deleting assessment {} for brain {} version {} in workspace {}...".format(
+                name, brain_name, version, self._workspace_id
+            )
+        )
+
+        url_path = _DELETE_ASSESSMENT_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            name=brain_name,
+            version=version,
+            assessmentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        return self._delete(url=url, debug=debug, output=output)
 
     def _raise_on_redirect(self, response: requests.Response):
         """Raises an HTTPError if the response is 301.

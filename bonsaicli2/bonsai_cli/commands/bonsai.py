@@ -2,15 +2,15 @@
 This file contains the main code for version 2 of the bonsai command line,
 the command line can be used to interact with the bonsai service.
 """
-__author__ = "Karthik Sankara Subramanian"
+__author__ = "Karthik Sankara Subramanian, Anil Puvvadi"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
+import click
 import os
 import platform
 import pkg_resources
 import pprint
 import sys
-import click
 
 from typing import Any, Dict, Optional
 
@@ -29,6 +29,7 @@ from bonsai_cli.utils import (
 from .brain import brain
 from .exportedbrain import exportedbrain
 from .simulator import simulator
+from .imported_model import importedmodel
 
 log = Logger()
 
@@ -270,6 +271,7 @@ cli.add_command(bonsai_help)
 cli.add_command(brain)
 cli.add_command(exportedbrain)
 cli.add_command(simulator)
+cli.add_command(importedmodel)
 cli.add_command(switch)
 cli.add_command(configure)
 

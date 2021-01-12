@@ -7,8 +7,7 @@ __copyright__ = "Copyright 2020, Microsoft Corp."
 import click
 from json import dumps
 
-from bonsai_cli.api import BrainServerError
-from bonsai_cli.exceptions import AuthenticationError
+from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
     get_version_checker,

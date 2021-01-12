@@ -30,6 +30,7 @@ setup(
         "websocket-client>=0.40.0",
         "msal-extensions>=0.1.3",
         "opencensus-ext-azure>=1.0.4",
+        "requests_toolbelt>=0.9.1",
     ],
     packages=find_packages(),
     python_requires=">=3.6",

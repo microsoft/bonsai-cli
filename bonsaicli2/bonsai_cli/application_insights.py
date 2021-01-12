@@ -1,3 +1,8 @@
+# We disable reportUnknownMemberType for this file because we're calling
+# flush method in opencensus AzureEventHandler, which is not properly annotated
+
+# pyright: reportUnknownMemberType = false
+
 import abc
 import logging
 
@@ -10,11 +15,10 @@ from . import __version__
 
 console_logger = Logger()
 appInsightsLogger = logging.Logger(__name__)
-appInsightsLogger.addHandler(
-    AzureEventHandler(
-        connection_string="InstrumentationKey=1b54b5e5-a4de-47f6-95f8-c4bb974c89b7;IngestionEndpoint=https://westus2-1.in.applicationinsights.azure.com/"
-    )
+appInsightsHandler = AzureEventHandler(
+    connection_string="InstrumentationKey=1b54b5e5-a4de-47f6-95f8-c4bb974c89b7;IngestionEndpoint=https://westus2-1.in.applicationinsights.azure.com/"
 )
+appInsightsLogger.addHandler(appInsightsHandler)
 
 
 class CustomEventInterface(metaclass=abc.ABCMeta):
@@ -62,7 +66,7 @@ class SkeletonApplicationInsightsHandler(ApplicationInsightsHandlerInterface):
     in place with no changes, but also no real operations.
     """
 
-    def create_event(self, event_name: str, **kwargs: Any) -> CustomEventInterface:
+    def create_event(self, event_name: str, **kwargs: Any) -> SkeletonCustomEvent:
         return SkeletonCustomEvent()
 
 
@@ -108,17 +112,10 @@ class CustomEvent(CustomEventInterface):
         """
         self._parse_api_response(api_response)
         self._end_event()
-        upload_start_time = datetime.utcnow()
         appInsightsLogger.warning(
             self.name, extra={"custom_dimensions": self.event_properties}
         )
-        upload_end_time = datetime.utcnow()
-        if debug:
-            console_logger.info(
-                "Application Insights upload of event {} took {}\n".format(
-                    self.name, (upload_end_time - upload_start_time)
-                )
-            )
+        appInsightsHandler.flush(timeout=0)
 
     def _parse_api_response(self, api_response: Dict[str, str]):
         succeeded = True if api_response.get("status", "") == "Succeeded" else False
@@ -145,7 +142,7 @@ class ApplicationInsightsHandler(ApplicationInsightsHandlerInterface):
             "CLIVersion": __version__,
         }
 
-    def create_event(self, event_name: str, **kwargs: Any) -> CustomEventInterface:
+    def create_event(self, event_name: str, **kwargs: Any) -> CustomEvent:
         """
         Create and return a CustomEvent object. All handlers properties are passed
         though and become properties on the event as well.

@@ -6,6 +6,9 @@ __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2019, Microsoft Corp."
 
 import click
+from click._compat import get_text_stderr
+from configparser import NoSectionError
+from json import decoder
 import multiprocessing
 from multiprocessing.dummy import Pool
 import requests
@@ -13,13 +16,12 @@ import sys
 import timeit
 from typing import Any, Optional
 
-from .logger import Logger
 from . import __version__
-from .config import Config
 from .api import BonsaiAPI
-from click._compat import get_text_stderr
-from configparser import NoSectionError
-from json import decoder
+from .config import Config
+from .exceptions import AuthenticationError, BrainServerError
+from .logger import Logger
+
 
 log = Logger()
 
@@ -71,6 +73,37 @@ def get_version_checker(ctx: click.Context, interactive: bool):
         return AsyncCliVersionChecker()
     else:
         return NullCliVersionChecker()
+
+
+def get_latest_brain_version(
+    name: str, operation: str, debug: bool, output: str, test: bool
+):
+    try:
+        response = api(use_aad=True).list_brain_versions(name)
+
+    except BrainServerError as e:
+        if e.exception["statusCode"] == 404:
+            raise_not_found_as_click_exception(
+                debug,
+                output,
+                operation,
+                "Brain",
+                name,
+                test,
+                e,
+            )
+
+        else:
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+    except AuthenticationError as e:
+        raise_as_click_exception(e)
+
+    brain_versions_desc = sorted(
+        response["value"], key=lambda i: i["version"], reverse=True
+    )
+
+    return brain_versions_desc[0]["version"]
 
 
 class CliVersionCheckerInterface(object):
