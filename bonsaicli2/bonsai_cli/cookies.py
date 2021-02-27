@@ -90,7 +90,7 @@ class CookieConfiguration(object):
         try:
             return self._config_parser.get(_APPLICATION_INSIGHTS_SECTION, option)
         except NoOptionError:
-            return "false"
+            return "true"
 
     def _write_config_to_file(self) -> None:
         try:

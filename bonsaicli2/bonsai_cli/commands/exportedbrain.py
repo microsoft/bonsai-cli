@@ -65,6 +65,12 @@ def exportedbrain():
     type=click.Choice(["linux", "windows"]),
     default="linux",
 )
+@click.option(
+    "--export-type",
+    type=click.Choice(["Predictor", "Neuralsim"]),
+    default="Predictor",
+    hidden=True,
+)
 def create_exportedbrain(
     ctx: click.Context,
     name: str,
@@ -78,6 +84,7 @@ def create_exportedbrain(
     output: str,
     test: bool,
     os_type: str,
+    export_type: str,
 ):
     version_checker = get_version_checker(ctx, interactive=not output)
 
@@ -104,6 +111,7 @@ def create_exportedbrain(
             brain_version=brain_version,
             workspace=workspace_id,
             debug=debug,
+            export_type=export_type,
         )
     except BrainServerError as e:
         if "Unique index constraint violation" in str(e):
