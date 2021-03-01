@@ -4,6 +4,7 @@ This file contains the code for commands that target a bonsai brain version in v
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
+from typing import List, Optional
 import click
 from json import dumps
 from tabulate import tabulate
@@ -797,6 +798,20 @@ def get_inkling(
     help="Number of instances to perform training with, in the case of managed simulators.",
 )
 @click.option(
+    "--log-session-count",
+    "-s",
+    default=1,
+    type=int,
+    help="Number of simulators to enable training logging for, in the case of managed simulators. Default is 1.",
+)
+@click.option(
+    "--include-system-logs",
+    "-l",
+    default=False,
+    is_flag=True,
+    help="Including system logs will collect additional logs from your managed simulators for which logging is enabled for, in the case of managed simulators.",
+)
+@click.option(
     "--workspace-id",
     "-w",
     help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
@@ -820,6 +835,8 @@ def start_training(
     simulator_package_name: str,
     concept_name: str,
     instance_count: str,
+    log_session_count: str,
+    include_system_logs: bool,
     workspace_id: str,
     debug: bool,
     output: str,
@@ -869,6 +886,16 @@ def start_training(
     if instance_count and not simulator_package_name:
         raise_as_click_exception(
             "\nInstance count works only with a simulator package, please provide the name of the simulator package you would like to use"
+        )
+
+    if log_session_count != 1 and not simulator_package_name:
+        raise_as_click_exception(
+            "\nLog session count works only with a simulator package, please provide the name of the simulator package you would like to use"
+        )
+
+    if include_system_logs and not simulator_package_name:
+        raise_as_click_exception(
+            "\nIncluding system logs works only with a simulator package, please provide the name of the simulator package you would like to use"
         )
 
     if simulator_package_name:
@@ -923,6 +950,8 @@ def start_training(
                 max_instance_count=max_instance_count,
                 auto_scaling=auto_scaling,
                 auto_termination=auto_termination,
+                log_session_count=log_session_count,
+                include_system_logs=include_system_logs,
                 workspace=workspace_id,
                 debug=debug,
             )
@@ -931,8 +960,13 @@ def start_training(
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     try:
+        concept_names: Optional[List[str]] = [concept_name] if concept_name else None
         response = api(use_aad=True).start_training(
-            name, version=version, workspace=workspace_id, debug=debug
+            name,
+            version=version,
+            workspace=workspace_id,
+            debug=debug,
+            concept_names=concept_names,
         )
 
     except BrainServerError as e:
@@ -1076,21 +1110,21 @@ def stop_training(
     "--session-id",
     "-d",
     type=str,
-    help="Identifier for the simulator. This only applies to unmanaged simulators.",
+    help="Identifier for the simulator, in the case of unmanaged simulators.",
 )
 @click.option(
-    "--session-count",
+    "--log-session-count",
     "-s",
     type=int,
     default=4,
-    help="Number of simulators to enable logging for. This only applies to managed simulators. Default is 4.",
+    help="Number of simulators to enable logging for, in the case of managed simulators. Default is 4.",
 )
 @click.option(
     "--include-system-logs",
     "-l",
     default=False,
     is_flag=True,
-    help="Including system logs will collect additional logs from your managed simulators. Please note that this will cause some or all of your managed simulators to restart. This only applies to managed simulators.",
+    help="Including system logs will collect additional logs from your managed simulators. Please note that this will cause some or all of your managed simulators to restart, in the case of managed simulators.",
 )
 @click.option(
     "--yes",
@@ -1118,7 +1152,7 @@ def start_logging(
     workspace_id: str,
     managed_simulator: bool,
     session_id: str,
-    session_count: int,
+    log_session_count: int,
     include_system_logs: bool,
     yes: bool,
     debug: bool,
@@ -1176,7 +1210,7 @@ def start_logging(
                 name,
                 version=version,
                 session_id=session_id,
-                session_count=session_count,
+                log_session_count=log_session_count,
                 include_system_logs=include_system_logs,
                 workspace=workspace_id,
                 debug=debug,
@@ -1228,7 +1262,7 @@ def start_logging(
 @click.option(
     "--version",
     type=int,
-    help="[Required] Version to stop logging, defaults to latest.",
+    help="Version to stop logging, defaults to latest.",
 )
 @click.option(
     "--workspace-id",
@@ -1641,6 +1675,8 @@ def start_assessing(
                 max_instance_count=max_instance_count,
                 auto_scaling=auto_scaling,
                 auto_termination=auto_termination,
+                log_session_count="1",
+                include_system_logs=False,
                 workspace=workspace_id,
                 debug=debug,
             )

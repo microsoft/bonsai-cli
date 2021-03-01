@@ -142,7 +142,7 @@ class TestApplicationInsights(TestCase):
         )
 
     @patch("configparser.RawConfigParser")
-    def test_app_insights_disabled_by_default(self, MockConfigParser: MagicMock):
+    def test_app_insights_enable_by_default(self, MockConfigParser: MagicMock):
         parser = MockConfigParser()
         parser.get.side_effect = NoOptionError("option", "section")
         cookie_config = cookies.CookieConfiguration(parser)
@@ -156,5 +156,5 @@ class TestApplicationInsights(TestCase):
         )
         self.assertIsInstance(
             bonsai_api.application_insights_handler,
-            application_insights.SkeletonApplicationInsightsHandler,
+            application_insights.ApplicationInsightsHandler,
         )
