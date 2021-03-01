@@ -951,8 +951,6 @@ class BonsaiAPI(object):
         output: Optional[str] = None,
     ):
 
-        log.information("****I am fine***")
-
         url_path = _CREATE_IMPORTED_MODEL_URL_PATH_TEMPLATE.format(
             workspaceid=workspace if workspace else self._workspace_id,
             importedmodelname=name,
@@ -1077,7 +1075,6 @@ class BonsaiAPI(object):
     def create_sim_package(
         self,
         name: str,
-        image_path: str,
         start_instance_count: int,
         min_instance_count: int,
         max_instance_count: int,
@@ -1085,6 +1082,9 @@ class BonsaiAPI(object):
         memory_in_gb_per_instance: float,
         auto_scale: bool,
         auto_terminate: bool,
+        image_path: Optional[str] = None,
+        model_file_path: Optional[str] = None,
+        model_base_image_name: Optional[str] = None,
         display_name: Optional[str] = None,
         description: Optional[str] = None,
         os_type: Optional[str] = None,
@@ -1114,6 +1114,8 @@ class BonsaiAPI(object):
             "osType": os_type,
             "packageType": package_type,
             "imagePath": image_path,
+            "modelFilePath": model_file_path,
+            "modelBaseImageName": model_base_image_name,
             "minInstanceCount": min_instance_count,
             "maxInstanceCount": max_instance_count,
             "autoScale": auto_scale,
@@ -1254,6 +1256,7 @@ class BonsaiAPI(object):
         auto_termination: Optional[str] = None,
         log_session_count: Optional[str] = None,
         include_system_logs: bool = False,
+        log_all_simulators: bool = False,
         workspace: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
@@ -1281,16 +1284,14 @@ class BonsaiAPI(object):
         )
 
         simulatorLogConfig = json.loads(
-            '{{"sessionCount": "{}", "includeSystemLogs": "{}" }}'.format(
-                log_session_count, include_system_logs
+            '{{"sessionCount": "{}", "includeSystemLogs": "{}", "logAll": "{}" }}'.format(
+                log_session_count, include_system_logs, log_all_simulators
             )
         )
 
         data = {
             "purpose": purpose,
             "description": description,
-            "resourceGroupName": "",
-            "Subscription": "",
             "coresPerInstance": cores_per_instance,
             "memInGBPerInstance": memory_in_gb_per_instance,
             "startInstanceCount": start_instance_count,
@@ -1859,7 +1860,7 @@ class BonsaiAPI(object):
             "maximumDurationInMinutes": maximum_duration_in_minutes,
         }
 
-        return self._post(url=url, data=data, debug=debug, output=output)
+        return self._put(url=url, data=data, debug=debug, output=output)
 
     def list_assessment(
         self,
@@ -1933,7 +1934,7 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
 
         data = {"displayName": display_name, "description": description}
-        return self._put(url=url, data=data, debug=debug, output=output)
+        return self._patch(url=url, data=data, debug=debug, output=output)
 
     def stop_assessment_v2(
         self,
@@ -1959,7 +1960,7 @@ class BonsaiAPI(object):
         url = urljoin(self._api_url, url_path)
 
         data = {"state": state}
-        return self._put(url=url, data=data, debug=debug, output=output)
+        return self._patch(url=url, data=data, debug=debug, output=output)
 
     def delete_assessment(
         self,

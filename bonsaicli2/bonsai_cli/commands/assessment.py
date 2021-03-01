@@ -5,7 +5,7 @@ __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
 import click
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from json import dumps
 import re
@@ -174,6 +174,9 @@ def start_assessment(
     if not episode_iteration_limit:
         episode_iteration_limit = 1000
 
+    if not name:
+        name = brain_name + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
     try:
         response = api(use_aad=True).start_assessmentv2(
             name=name,
@@ -252,8 +255,9 @@ def start_assessment(
                 max_instance_count=max_instance_count,
                 auto_scaling=auto_scaling,
                 auto_termination=auto_termination,
-                log_session_count="1",
+                log_session_count="0",
                 include_system_logs=False,
+                log_all_simulators=False,
                 workspace=workspace_id,
                 debug=debug,
             )

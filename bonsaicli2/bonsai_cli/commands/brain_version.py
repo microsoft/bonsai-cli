@@ -952,6 +952,7 @@ def start_training(
                 auto_termination=auto_termination,
                 log_session_count=log_session_count,
                 include_system_logs=include_system_logs,
+                log_all_simulators=False,
                 workspace=workspace_id,
                 debug=debug,
             )
@@ -1677,6 +1678,7 @@ def start_assessing(
                 auto_termination=auto_termination,
                 log_session_count="1",
                 include_system_logs=False,
+                log_all_simulators=False,
                 workspace=workspace_id,
                 debug=debug,
             )
