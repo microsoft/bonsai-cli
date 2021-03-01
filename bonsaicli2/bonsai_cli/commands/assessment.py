@@ -252,6 +252,8 @@ def start_assessment(
                 max_instance_count=max_instance_count,
                 auto_scaling=auto_scaling,
                 auto_termination=auto_termination,
+                log_session_count="1",
+                include_system_logs=False,
                 workspace=workspace_id,
                 debug=debug,
             )
