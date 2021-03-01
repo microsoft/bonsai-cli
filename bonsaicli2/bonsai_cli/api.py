@@ -10,7 +10,7 @@ import os
 import pprint
 import sys
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 if sys.version_info >= (3,):
@@ -480,8 +480,8 @@ class BonsaiAPI(object):
                 "timeout. Request ID: {}".format(url, self.timeout, req_id)
             )
 
+        response_dict = {}
         try:
-            response_dict = {}
             response.raise_for_status()
             self._raise_on_redirect(response)
             log.debug("{} {} results:\n{}".format(http_method, url, response.text))
@@ -1252,6 +1252,8 @@ class BonsaiAPI(object):
         max_instance_count: Optional[str] = None,
         auto_scaling: Optional[str] = None,
         auto_termination: Optional[str] = None,
+        log_session_count: Optional[str] = None,
+        include_system_logs: bool = False,
         workspace: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
@@ -1278,6 +1280,12 @@ class BonsaiAPI(object):
             )
         )
 
+        simulatorLogConfig = json.loads(
+            '{{"sessionCount": "{}", "includeSystemLogs": "{}" }}'.format(
+                log_session_count, include_system_logs
+            )
+        )
+
         data = {
             "purpose": purpose,
             "description": description,
@@ -1290,6 +1298,7 @@ class BonsaiAPI(object):
             "maxInstanceCount": max_instance_count,
             "autoScaling": auto_scaling,
             "autoTermination": auto_termination,
+            "simulatorLogConfig": simulatorLogConfig,
         }
 
         return self._post(url=url, data=data, debug=debug, output=output, event=event)
@@ -1437,6 +1446,7 @@ class BonsaiAPI(object):
         name: str,
         version: int = 1,
         workspace: Optional[str] = None,
+        concept_names: Optional[List[str]] = None,
         debug: bool = False,
         output: Optional[str] = None,
     ):
@@ -1453,7 +1463,11 @@ class BonsaiAPI(object):
             ObjectType=[_BRAIN_VERSION_OBJECT],
         )
 
-        return self._post(url=url, debug=debug, output=output, event=event)
+        data: Optional[Dict[str, Any]] = (
+            {"concepts": concept_names} if concept_names else None
+        )
+
+        return self._post(url=url, debug=debug, output=output, event=event, data=data)
 
     def stop_training(
         self,
@@ -1482,7 +1496,7 @@ class BonsaiAPI(object):
         self,
         name: str,
         session_id: str,
-        session_count: int,
+        log_session_count: int,
         include_system_logs: bool,
         version: int = 1,
         workspace: Optional[str] = None,
@@ -1496,7 +1510,10 @@ class BonsaiAPI(object):
             sessionId=session_id,
         )
 
-        data = {"sessionCount": session_count, "includeSystemLogs": include_system_logs}
+        data = {
+            "sessionCount": log_session_count,
+            "includeSystemLogs": include_system_logs,
+        }
 
         url = urljoin(self._api_url, url_path)
 
@@ -1608,6 +1625,7 @@ class BonsaiAPI(object):
         workspace: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
+        export_type: Optional[str] = None,
     ):
         log.debug("Creating a new exported brain {}".format(name))
         url_path = _CREATE_EXPORTED_BRAIN_URL_PATH_TEMPLATE.format(
@@ -1619,6 +1637,7 @@ class BonsaiAPI(object):
             ObjectUri=[url_path],
             ObjectType=[_EXPORTED_BRAIN_OBJECT, _BRAIN_VERSION_OBJECT],
         )
+        export_type = export_type or "Predictor"
 
         data = {
             "name": name,
@@ -1630,6 +1649,7 @@ class BonsaiAPI(object):
             "brainVersion": brain_version,
             "displayName": display_name,
             "description": description,
+            "exportType": export_type,
         }
 
         return self._post(url=url, data=data, debug=debug, output=output, event=event)
