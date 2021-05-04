@@ -2,8 +2,9 @@
 This file contains the code for commands that target a bonsai imported model in version 2 of the bonsai command line.
 """
 __author__ = "Anil Puvvadi"
-__copyright__ = "Copyright 2020, Microsoft Corp."
+__copyright__ = "Copyright 2021, Microsoft Corp."
 
+from typing import Any, Dict, List
 import click
 import os
 import time
@@ -14,11 +15,11 @@ from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
     get_version_checker,
+    raise_204_click_exception,
     raise_as_click_exception,
     raise_brain_server_error_as_click_exception,
-    raise_unique_constraint_violation_as_click_exception,
     raise_not_found_as_click_exception,
-    raise_client_side_click_exception,
+    raise_unique_constraint_violation_as_click_exception,
 )
 
 
@@ -31,12 +32,18 @@ def importedmodel():
 @click.command("create", short_help="Create a imported model.")
 @click.option("--name", "-n", help="[Required] Name of the imported model.")
 @click.option("--modelfilepath", "-m", help="[Required] ModelFilePath on local system.")
-@click.option("--display-name", "-dn", help="Display name of the imported model.")
-@click.option("--description", "-des", help="Description for the imported model.")
+@click.option("--display-name", help="Display name of the imported model.")
+@click.option("--description", help="Description for the imported model.")
 @click.option(
     "--workspace-id",
     "-w",
     help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
+)
+@click.option(
+    "--no-wait",
+    default=False,
+    is_flag=True,
+    help="If set to true, do not wait for the imported model operation that may be long-running to complete.",
 )
 @click.option(
     "--debug", default=False, is_flag=True, help="Verbose logging for request."
@@ -57,6 +64,7 @@ def create_importedmodel(
     display_name: str,
     description: str,
     workspace_id: str,
+    no_wait: bool,
     debug: bool,
     output: str,
     test: bool,
@@ -74,14 +82,6 @@ def create_importedmodel(
         required_options_provided = False
         error_msg += "\nModelfilepath is required"
 
-    if not display_name:
-        required_options_provided = False
-        error_msg += "\nDisplayName for the imported model is required"
-
-    if not description:
-        required_options_provided = False
-        error_msg += "\nDescription for the imported model is required"
-
     if not required_options_provided:
         raise_as_click_exception(error_msg)
 
@@ -97,8 +97,6 @@ def create_importedmodel(
             f"step 1: Uploading {modelfilepath} of size:{size*0.000001} MB is successful in {toc - tic:0.4f} seconds."
         )
 
-        print("step 2: Finalizing the upload..This may take a while. Please wait...")
-
         response = api(use_aad=True).create_importedmodel(
             name=name,
             uploaded_file_path=response["modelFileStoragePath"],
@@ -108,41 +106,41 @@ def create_importedmodel(
             debug=debug,
             output=output,
         )
+        if not no_wait:
 
-        while response["operationStatus"] not in ["Succeeded", "Failed"]:
-            print(
-                "step 2: Finalizing the upload. The current status is "
-                + response["operationStatus"]
-                + ". Please wait..."
-            )
-            response = api(use_aad=True).get_importedmodel(
-                name=name, workspace=workspace_id
-            )
-            time.sleep(10)
+            print("step 2: Imported model creation may take a while. Please wait...")
 
-        if response["operationStatus"] == "Succeeded":
-            statusMessage = "Created new imported model {} successfully.".format(
-                response["name"]
-            )
+            while response["operationStatus"] not in ["Succeeded", "Failed"]:
+                print(
+                    "step 3: Finalizing the imported model. The current status is "
+                    + response["operationStatus"]
+                    + ". Please wait..."
+                )
+                response = api(use_aad=True).get_importedmodel(
+                    name=name, workspace=workspace_id
+                )
+                time.sleep(10)
 
-        elif response["operationStatus"] == "Failed":
-            statusMessage = "Failed to create new imported model {}. Please contact Bonsai Service Team.".format(
-                response["name"]
-            )
+            if response["operationStatus"] == "Succeeded":
+                statusMessage = "Created new imported model {} successfully.".format(
+                    response["name"]
+                )
+            else:
+                raise_as_click_exception(response["operationStatusMessage"])
+
+            if output == "json":
+                json_response = {
+                    "status": response["operationStatus"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": statusMessage,
+                }
+                click.echo(dumps(json_response, indent=4))
+            else:
+                click.echo(statusMessage)
         else:
-            statusMessage = "Status unknown for imported model {} upload .Please contact Bonsai Service Team.".format(
-                response["name"]
+            click.echo(
+                "imported model creation is still in progress. Please use bonsai importedmodel show -n <importedmodelname> to check the status."
             )
-
-        if output == "json":
-            json_response = {
-                "status": response["operationStatus"],
-                "statusCode": response["statusCode"],
-                "statusMessage": statusMessage,
-            }
-            click.echo(dumps(json_response, indent=4))
-        else:
-            click.echo(statusMessage)
 
     except BrainServerError as e:
         if "Unique index constraint violation" in str(e):
@@ -217,37 +215,33 @@ def show_importedmodel(
 
     if output == "json":
         json_response = {
-            "status": response["operationStatus"],
-            "statusCode": response["statusCode"],
-            "statusMessage": {
-                "id": response["id"],
-                "name": response["name"],
-                "displayName": response["displayName"],
-                "description": response["description"],
-                "importedModelType": response["importedModelType"],
-                "createdTimeStamp": response["createdTimeStamp"],
-                "modifedTimeStamp": response["modifedTimeStamp"],
-            },
+            "name": response["name"],
+            "displayName": response["displayName"],
+            "description": response["description"],
+            "importedModelType": response["importedModelType"],
+            "createdOn": response["createdTimeStamp"],
+            "modifiedOn": response["createdTimeStamp"],
+            "Status": response["operationStatus"],
+            "StatusMessage": response["operationStatusMessage"],
         }
 
         click.echo(dumps(json_response, indent=4))
-
     else:
-        click.echo("Id: {}".format(response["id"]))
         click.echo("Name: {}".format(response["name"]))
-        click.echo("DISPLAY NAME: {}".format(response["displayName"]))
-        click.echo("DESCRIPTION: {}".format(response["description"]))
-        click.echo("IMPORTED MODEL TYPE: {}".format(response["importedModelType"]))
-        click.echo("CREATED TIMESTAMP: {}".format(response["createdTimeStamp"]))
-        click.echo("MODIFIED TIMESTAMP: {}".format(response["modifedTimeStamp"]))
+        click.echo("Display Name: {}".format(response["displayName"]))
+        click.echo("Description: {}".format(response["description"]))
+        click.echo("Imported Model Type: {}".format(response["importedModelType"]))
+        click.echo("Created On: {}".format(response["createdTimeStamp"]))
+        click.echo("Modified On: {}".format(response["createdTimeStamp"]))
+        click.echo("Status: {}".format(response["operationStatus"]))
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
 @click.command("update", short_help="Update information about a imported model")
 @click.option("--name", "-n", help="[Required] Name of the imported model.")
-@click.option("--display-name", "-dn", help="Display name of the imported model.")
-@click.option("--description", "-des", help="Description for the imported model.")
+@click.option("--display-name", help="Display name of the imported model.")
+@click.option("--description", help="Description for the imported model.")
 @click.option(
     "--workspace-id",
     "-w",
@@ -312,7 +306,7 @@ def update_importedmodel(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} updated.".format(response["name"])
+    status_message = "Updated {}.".format(response["name"])
 
     if output == "json":
         json_response = {
@@ -372,7 +366,7 @@ def list_importedmodel(
         ctx.exit()
 
     if output == "json":
-        dict_rows = []
+        dict_rows: List[Dict[str, Any]] = []
         for imported_model in response["value"]:
             dict_rows.append(imported_model["name"])
 
@@ -446,7 +440,7 @@ def delete_importedmodel(
 
     if not yes:
         click.echo(
-            "Are you sure you want to delete IMPORTED model {} (y/n?).".format(name)
+            "Are you sure you want to delete imported model {} (y/n?).".format(name)
         )
         choice = input().lower()
 
@@ -467,7 +461,7 @@ def delete_importedmodel(
             )
 
             if response["statusCode"] == 204:
-                raise_client_side_click_exception(
+                raise_204_click_exception(
                     debug,
                     output,
                     test,
@@ -482,7 +476,7 @@ def delete_importedmodel(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        status_message = "{} deleted.".format(name)
+        status_message = "Deleted {}.".format(name)
 
         if output == "json":
             json_response = {

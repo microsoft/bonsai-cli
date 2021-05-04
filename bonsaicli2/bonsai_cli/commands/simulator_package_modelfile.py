@@ -4,6 +4,7 @@ This file contains the code for commands that target a bonsai model file simulat
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2021, Microsoft Corp."
 
+from typing import Any, Dict, List
 import click
 import os
 import time
@@ -17,6 +18,7 @@ from bonsai_cli.utils import (
     get_version_checker,
     raise_as_click_exception,
     raise_brain_server_error_as_click_exception,
+    raise_client_side_click_exception,
     raise_unique_constraint_violation_as_click_exception,
 )
 
@@ -213,6 +215,22 @@ def create_modelfile_simulator_package(
             output=output,
         )
 
+        status_message = "Created new modelfile simulator package {}. Run 'bonsai simulator package show -n {}' to get the status of the simulator package.".format(
+            sim_package_response["name"], sim_package_response["name"]
+        )
+
+        if output == "json":
+            json_response = {
+                "status": sim_package_response["status"],
+                "statusCode": sim_package_response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if "Unique index constraint violation" in str(e):
             raise_unique_constraint_violation_as_click_exception(
@@ -224,21 +242,10 @@ def create_modelfile_simulator_package(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "Created new modelfile simulator package {}. Run 'bonsai simulator package show -n {}' to get the status of the simulator package.".format(
-        sim_package_response["name"], sim_package_response["name"]
-    )
-
-    if output == "json":
-        json_response = {
-            "status": sim_package_response["status"],
-            "statusCode": sim_package_response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -281,73 +288,78 @@ def list_base_image_modelfile_simulator_package(
             workspace=workspace_id, debug=debug, output=output
         )
 
+        rows: List[Any] = []
+        dict_rows: List[Dict[str, Any]] = []
+        for item in response["value"]:
+            try:
+                base_image = item["imageIdentifier"]
+                cores_per_instance = item["coresPerInstanceRecommended"]
+                memory_in_gb_per_instance = item["memInGBPerInstanceRecommended"]
+                start_instance_count = item["startInstanceCount"]
+                min_instance_count = item["minInstanceCount"]
+                max_instance_count = item["maxInstanceCount"]
+                rows.append(
+                    [
+                        base_image,
+                        cores_per_instance,
+                        memory_in_gb_per_instance,
+                        start_instance_count,
+                        min_instance_count,
+                        max_instance_count,
+                    ]
+                )
+                dict_rows.append(
+                    {
+                        "baseImage": base_image,
+                        "defaultCoresPerInstance": cores_per_instance,
+                        "defaultMemoryInGBPerInstance": memory_in_gb_per_instance,
+                        "defaultStartInstanceCount": start_instance_count,
+                        "defaultMinInstanceCount": min_instance_count,
+                        "defaultMaxInstanceCount": max_instance_count,
+                    }
+                )
+            except KeyError:
+                pass  # If it's missing a field, ignore it.
+
+        if output == "json":
+            json_response = {
+                "value": dict_rows,
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": "",
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            table = tabulate(
+                rows,
+                headers=[
+                    "Base Image",
+                    "Default Cores Per Instance",
+                    "Default Memory in GB Per Instance",
+                    "Default Start Instance Count",
+                    "Default Min Instance Count",
+                    "Default Max Instance Count",
+                ],
+                tablefmt="orgtbl",
+            )
+            click.echo(table)
+
     except BrainServerError as e:
         raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    rows = []
-    dict_rows = []
-    for item in response["value"]:
-        try:
-            base_image = item["imageIdentifier"]
-            cores_per_instance = item["coresPerInstanceRecommended"]
-            memory_in_gb_per_instance = item["memInGBPerInstanceRecommended"]
-            start_instance_count = item["startInstanceCount"]
-            min_instance_count = item["minInstanceCount"]
-            max_instance_count = item["maxInstanceCount"]
-            rows.append(
-                [
-                    base_image,
-                    cores_per_instance,
-                    memory_in_gb_per_instance,
-                    start_instance_count,
-                    min_instance_count,
-                    max_instance_count,
-                ]
-            )
-            dict_rows.append(
-                {
-                    "baseImage": base_image,
-                    "defaultCoresPerInstance": cores_per_instance,
-                    "defaultMemoryInGBPerInstance": memory_in_gb_per_instance,
-                    "defaultStartInstanceCount": start_instance_count,
-                    "defaultMinInstanceCount": min_instance_count,
-                    "defaultMaxInstanceCount": max_instance_count,
-                }
-            )
-        except KeyError:
-            pass  # If it's missing a field, ignore it.
-
-    if output == "json":
-        json_response = {
-            "value": dict_rows,
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": "",
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        table = tabulate(
-            rows,
-            headers=[
-                "Base Image",
-                "Default Cores Per Instance",
-                "Default Memory in GB Per Instance",
-                "Default Start Instance Count",
-                "Default Min Instance Count",
-                "Default Max Instance Count",
-            ],
-            tablefmt="orgtbl",
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
         )
-        click.echo(table)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

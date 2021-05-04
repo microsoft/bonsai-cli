@@ -4,6 +4,7 @@ This file contains the code for commands that target a bonsai unmanaged simulato
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
+from typing import Any, Dict, List
 import click
 from json import dumps
 from tabulate import tabulate
@@ -66,8 +67,8 @@ def list_simulator_unmanaged(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    rows = []
-    dict_rows = []
+    rows: List[Any] = []
+    dict_rows: List[Dict[str, Any]] = []
     if simulator_name:
         for item in response["value"]:
             try:
@@ -307,6 +308,9 @@ def show_simulator_unmanaged(
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
+ALLOWED_ACTIONS = ["Train", "Assess", "Debug", "Inactive"]
+
+
 @click.command("connect", short_help="Connect an unmanaged simulator.")
 @click.option(
     "--brain-name",
@@ -314,7 +318,10 @@ def show_simulator_unmanaged(
     help="[Required] The name of the brain for the simulators to connect to.",
 )
 @click.option(
-    "--action", "-a", help="[Required] The assigned action for the simulators."
+    "--action",
+    "-a",
+    help="[Required] The assigned action for the simulators",
+    type=click.Choice(ALLOWED_ACTIONS, case_sensitive=False),
 )
 @click.option(
     "--concept-name",
@@ -394,8 +401,6 @@ def connect_simulator_unmanaged(
         brain_version = get_latest_brain_version(
             brain_name, "Connect simulator unmanaged", debug, output, test
         )
-
-    action = action.capitalize()
 
     if simulator_name:
         try:

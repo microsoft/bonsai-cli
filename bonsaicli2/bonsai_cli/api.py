@@ -147,10 +147,17 @@ _CREATE_ACTION = "Create"
 _UPDATE_ACTION = "Update"
 _DELETE_ACTION = "Delete"
 _VIEW_ACTION = "View"
+_START_ACTION = "Start"
+_STOP_ACTION = "Stop"
 _START_TRAINING_ACTION = "StartTraining"
 _STOP_TRAINING_ACTION = "StopTraining"
+_RESET_TRAINING_ACTION = "ResetTraining"
 _START_ASSESSMENT_ACTION = "StartAssessment"
 _STOP_ASSESSMENT_ACTION = "StopAssessment"
+_START_LOGGING_ACTION = "StartLogging"
+_STOP_LOGGING_ACTION = "StopLogging"
+_ASSESSMENT_OBJECT = "Assessment"
+_ALL_ASSESSMENTS_OBJECT = "Assessments"
 _BRAIN_OBJECT = "Brain"
 _ALL_EXPORTED_BRAINS_OBJECT = "ExportedBrains"
 _EXPORTED_BRAIN_OBJECT = "ExportedBrain"
@@ -480,7 +487,7 @@ class BonsaiAPI(object):
                 "timeout. Request ID: {}".format(url, self.timeout, req_id)
             )
 
-        response_dict = {}
+        response_dict: Dict[str, str] = {}
         try:
             response.raise_for_status()
             self._raise_on_redirect(response)
@@ -915,7 +922,7 @@ class BonsaiAPI(object):
 
     # callback function to monitor the progress
     def post_file_callback(self, monitor: MultipartEncoderMonitor):
-        log.info("NUMBER OF BYTES READY FOR UPLOAD: {}".format(monitor.bytes_read))
+        log.info("NUMBER OF BYTES UPLOADED: {}".format(monitor.bytes_read))
 
     # uploads model file in zip format
     def post_file(
@@ -1517,8 +1524,13 @@ class BonsaiAPI(object):
         }
 
         url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_START_LOGGING_ACTION, _BRAIN_VERSION_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_BRAIN_VERSION_OBJECT],
+        )
 
-        return self._post(url=url, data=data, debug=debug, output=output)
+        return self._post(url=url, data=data, debug=debug, output=output, event=event)
 
     def stop_logging(
         self,
@@ -1537,8 +1549,13 @@ class BonsaiAPI(object):
         )
 
         url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_STOP_LOGGING_ACTION, _BRAIN_VERSION_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_BRAIN_VERSION_OBJECT],
+        )
 
-        return self._post(url=url, debug=debug, output=output)
+        return self._post(url=url, debug=debug, output=output, event=event)
 
     def reset_training(
         self,
@@ -1566,7 +1583,13 @@ class BonsaiAPI(object):
         else:
             data = {"concepts": concepts}
 
-        return self._post(url=url, data=data, debug=debug, output=output)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_RESET_TRAINING_ACTION, _BRAIN_VERSION_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_BRAIN_VERSION_OBJECT],
+        )
+
+        return self._post(url=url, data=data, debug=debug, output=output, event=event)
 
     def start_assessment(
         self,
@@ -1849,7 +1872,11 @@ class BonsaiAPI(object):
             assessmentName=name,
         )
         url = urljoin(self._api_url, url_path)
-
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_START_ACTION, _ASSESSMENT_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ASSESSMENT_OBJECT],
+        )
         data = {
             "name": name,
             "concept": concept_name,
@@ -1860,7 +1887,7 @@ class BonsaiAPI(object):
             "maximumDurationInMinutes": maximum_duration_in_minutes,
         }
 
-        return self._put(url=url, data=data, debug=debug, output=output)
+        return self._put(url=url, data=data, debug=debug, output=output, event=event)
 
     def list_assessment(
         self,
@@ -1881,8 +1908,13 @@ class BonsaiAPI(object):
             version=version,
         )
         url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _ALL_ASSESSMENTS_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_BRAIN_VERSION_OBJECT],
+        )
 
-        return self._get(url=url, debug=debug, output=output)
+        return self._get(url=url, debug=debug, output=output, event=event)
 
     def get_assessment(
         self,
@@ -1906,8 +1938,13 @@ class BonsaiAPI(object):
             assessmentName=name,
         )
         url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _ASSESSMENT_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ASSESSMENT_OBJECT],
+        )
 
-        return self._get(url=url, debug=debug, output=output)
+        return self._get(url=url, debug=debug, output=output, event=event)
 
     def update_assessment(
         self,
@@ -1932,9 +1969,14 @@ class BonsaiAPI(object):
             assessmentName=name,
         )
         url = urljoin(self._api_url, url_path)
-
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_UPDATE_ACTION, _ASSESSMENT_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ASSESSMENT_OBJECT],
+        )
         data = {"displayName": display_name, "description": description}
-        return self._patch(url=url, data=data, debug=debug, output=output)
+
+        return self._patch(url=url, data=data, debug=debug, output=output, event=event)
 
     def stop_assessment_v2(
         self,
@@ -1958,9 +2000,14 @@ class BonsaiAPI(object):
             assessmentName=name,
         )
         url = urljoin(self._api_url, url_path)
-
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_STOP_ACTION, _ASSESSMENT_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ASSESSMENT_OBJECT],
+        )
         data = {"state": state}
-        return self._patch(url=url, data=data, debug=debug, output=output)
+
+        return self._patch(url=url, data=data, debug=debug, output=output, event=event)
 
     def delete_assessment(
         self,
@@ -1984,7 +2031,13 @@ class BonsaiAPI(object):
             assessmentName=name,
         )
         url = urljoin(self._api_url, url_path)
-        return self._delete(url=url, debug=debug, output=output)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_DELETE_ACTION, _ASSESSMENT_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ASSESSMENT_OBJECT],
+        )
+
+        return self._delete(url=url, debug=debug, output=output, event=event)
 
     def _raise_on_redirect(self, response: requests.Response):
         """Raises an HTTPError if the response is 301.

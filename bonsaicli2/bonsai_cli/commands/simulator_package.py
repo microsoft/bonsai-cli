@@ -4,6 +4,7 @@ This file contains the code for commands that target a bonsai simulator package 
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
+from typing import Any, Dict, List
 import click
 import os
 import time
@@ -14,10 +15,11 @@ from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
     get_version_checker,
+    raise_204_click_exception,
     raise_as_click_exception,
     raise_brain_server_error_as_click_exception,
-    raise_not_found_as_click_exception,
     raise_client_side_click_exception,
+    raise_not_found_as_click_exception,
 )
 
 from .simulator_package_container import container
@@ -130,6 +132,30 @@ def show_simulator_package(
             name, workspace=workspace_id, debug=debug, output=output
         )
 
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": {
+                    "name": response["name"],
+                    "status": response["operationStatus"],
+                    "acrUri": response["imagePath"],
+                    "cores": response["coresPerInstance"],
+                    "memory": response["memInGbPerInstance"],
+                    "instanceCount": response["startInstanceCount"],
+                },
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo("Name: {}".format(response["name"]))
+            click.echo("Status: {}".format(response["operationStatus"]))
+            click.echo("ACR Uri: {}".format(response["imagePath"]))
+            click.echo("Cores (in vCPU): {}".format(response["coresPerInstance"]))
+            click.echo("Memory (in GB): {}".format(response["memInGbPerInstance"]))
+            click.echo("Instance Count: {}".format(response["startInstanceCount"]))
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -143,32 +169,14 @@ def show_simulator_package(
             )
         else:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
+
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": {
-                "name": response["name"],
-                "status": response["operationStatus"],
-                "acrUri": response["imagePath"],
-                "cores": response["coresPerInstance"],
-                "memory": response["memInGbPerInstance"],
-                "instanceCount": response["startInstanceCount"],
-            },
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo("Name: {}".format(response["name"]))
-        click.echo("Status: {}".format(response["operationStatus"]))
-        click.echo("ACR Uri: {}".format(response["imagePath"]))
-        click.echo("Cores (in vCPU): {}".format(response["coresPerInstance"]))
-        click.echo("Memory (in GB): {}".format(response["memInGbPerInstance"]))
-        click.echo("Instance Count: {}".format(response["startInstanceCount"]))
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -247,6 +255,24 @@ def update_simulator_package(
             output=output,
         )
 
+        status_message = "{} updated.".format(response["name"])
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -264,23 +290,10 @@ def update_simulator_package(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} updated.".format(response["name"])
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -313,37 +326,42 @@ def list_simulator_package(
             workspace=workspace_id, debug=debug
         )
 
+        if len(response["value"]) == 0:
+            click.echo("No simulator packages exist for the current user")
+            ctx.exit()
+
+        if output == "json":
+            dict_rows: List[Dict[str, Any]] = []
+            for simulator_package in response["value"]:
+                dict_rows.append(simulator_package["name"])
+
+            json_response = {
+                "value": dict_rows,
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": "",
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            for simulator_package in response["value"]:
+                click.echo(simulator_package["name"])
+
     except BrainServerError as e:
         raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if len(response["value"]) == 0:
-        click.echo("No simulator packages exist for the current user")
-        ctx.exit()
-
-    if output == "json":
-        dict_rows = []
-        for simulator_package in response["value"]:
-            dict_rows.append(simulator_package["name"])
-
-        json_response = {
-            "value": dict_rows,
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": "",
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        for simulator_package in response["value"]:
-            click.echo(simulator_package["name"])
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -419,7 +437,7 @@ def remove_simulator_package(
             )
 
             if response["statusCode"] == 204:
-                raise_client_side_click_exception(
+                raise_204_click_exception(
                     debug,
                     output,
                     test,
@@ -428,31 +446,31 @@ def remove_simulator_package(
                     response,
                 )
 
+            status_message = "{} removed. NOTE: Removing {} will not remove the container image of the simulator in ACR.".format(
+                name, name
+            )
+
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                if test:
+                    json_response["elapsed"] = str(response["elapsed"])
+                    json_response["timeTaken"] = str(response["timeTaken"])
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
+
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
         except AuthenticationError as e:
             raise_as_click_exception(e)
-
-        status_message = "{} removed. NOTE: Removing {} will not remove the container image of the simulator in ACR.".format(
-            name, name
-        )
-
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            if test:
-                json_response["elapsed"] = str(response["elapsed"])
-                json_response["timeTaken"] = str(response["timeTaken"])
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

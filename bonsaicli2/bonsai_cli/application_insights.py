@@ -1,8 +1,6 @@
 # We disable reportUnknownMemberType for this file because we're calling
 # flush method in opencensus AzureEventHandler, which is not properly annotated
 
-# pyright: reportUnknownMemberType = false
-
 import abc
 import logging
 

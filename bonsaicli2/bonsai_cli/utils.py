@@ -8,13 +8,13 @@ __copyright__ = "Copyright 2019, Microsoft Corp."
 import click
 from click._compat import get_text_stderr
 from configparser import NoSectionError
-from json import decoder
+from json import decoder, dumps
 import multiprocessing
 from multiprocessing.dummy import Pool
 import requests
 import sys
 import timeit
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from . import __version__
 from .api import BonsaiAPI
@@ -360,7 +360,7 @@ def raise_brain_server_error_as_click_exception(
     else:
         message = args[0].exception["errorDump"]
 
-    raise CustomClickException(str(message), color=color)
+    raise CustomClickException(str(dumps(message)), color=color)
 
 
 def raise_as_click_exception(*args: Any):
@@ -437,7 +437,7 @@ def raise_unique_constraint_violation_as_click_exception(
         else:
             message = "{} '{}' already exists".format(type, name)
 
-    raise CustomClickException(str(message), color=color)
+    raise CustomClickException(str(dumps(message)), color=color)
 
 
 def raise_not_found_as_click_exception(
@@ -493,10 +493,10 @@ def raise_not_found_as_click_exception(
         else:
             message = "{} '{}' not found".format(type, name)
 
-    raise CustomClickException(str(message), color=color)
+    raise CustomClickException(str(dumps(message)), color=color)
 
 
-def raise_client_side_click_exception(
+def raise_204_click_exception(
     debug: bool,
     output: str,
     test: bool,
@@ -543,13 +543,36 @@ def raise_client_side_click_exception(
     raise CustomClickException(str(message), color=color)
 
 
+def raise_client_side_click_exception(
+    output: str,
+    test: bool,
+    details: str,
+):
+    """This function raises a ClickException that is generated on client side"""
+    try:
+        config = Config(argv=sys.argv, use_aad=False)
+        color = config.use_color
+    except ValueError:
+        color = False
+
+    if output == "json":
+        message = {"Error": "CLI error occurred."}
+
+        if test:
+            message["Details"] = details
+    else:
+        message = "CLI error occurred."
+
+    raise CustomClickException(str(dumps(message)), color=color)
+
+
 def verify_required_configuration(bonsai_config: Config):
     """This function verifies that the user's configuration contains
     the information required for interacting with the Bonsai BRAIN api.
     If required configuration is missing, an appropriate error is
     raised as a ClickException.
     """
-    messages = []
+    messages: List[str] = []
     missing_config = False
 
     if not bonsai_config.use_aad and not bonsai_config.accesskey:

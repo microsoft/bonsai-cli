@@ -1,4 +1,8 @@
-# pyright:reportUnknownArgumentType =false
+"""
+Setup script for building cli
+"""
+__copyright__ = "Copyright 2020, Microsoft Corp."
+
 from codecs import open
 from setuptools import find_packages, setup
 

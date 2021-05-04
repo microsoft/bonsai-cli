@@ -4,7 +4,7 @@ This file contains the class to handle cookies for version 2 of the bonsai comma
 __author__ = "Lisa Peters"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
-# pyright:reportPrivateUsage=false
+# pyright: reportPrivateUsage=false
 
 from configparser import RawConfigParser, NoOptionError
 from datetime import datetime, timedelta
