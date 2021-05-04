@@ -14,6 +14,7 @@ from bonsai_cli.utils import (
     api,
     get_version_checker,
     raise_as_click_exception,
+    raise_client_side_click_exception,
     raise_unique_constraint_violation_as_click_exception,
 )
 
@@ -49,6 +50,7 @@ def container():
     "--os-type",
     "-p",
     help="[Required] OS type for the container simulator package. Windows or Linux.",
+    type=click.Choice(["Windows", "Linux"], case_sensitive=False),
 )
 @click.option(
     "--instance-count",
@@ -196,6 +198,22 @@ def create_container_simulator_package(
             output=output,
         )
 
+        status_message = "Created new container simulator package {}.".format(
+            response["name"]
+        )
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if "Unique index constraint violation" in str(e):
             raise_unique_constraint_violation_as_click_exception(
@@ -207,21 +225,10 @@ def create_container_simulator_package(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "Created new container simulator package {}.".format(
-        response["name"]
-    )
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

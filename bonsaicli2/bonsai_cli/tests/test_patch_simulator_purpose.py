@@ -1,7 +1,7 @@
 from bonsai_cli.api import BonsaiAPI
 from unittest import TestCase
 from unittest.mock import patch
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from click.testing import CliRunner
 from bonsai_cli.commands.bonsai import cli
 import json
@@ -68,7 +68,7 @@ class BonsaiAPIForTest(BonsaiAPI):
         workspace: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
-    ):
+    ) -> Dict[str, List[Dict[str, Union[int, str]]]]:
         if name not in self.brain_versions:
             return {"value": []}
 

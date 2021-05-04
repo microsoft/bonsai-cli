@@ -67,7 +67,7 @@ def exportedbrain():
 )
 @click.option(
     "--export-type",
-    type=click.Choice(["Predictor", "Neuralsim"]),
+    type=click.Choice(["Predictor", "Neuralsim", "ExportedBrain"]),
     default="Predictor",
     hidden=True,
 )
@@ -124,13 +124,18 @@ def create_exportedbrain(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} created.".format(response["name"])
-
     if output == "json":
         json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
+            "name": response["name"],
+            "displayName": response["displayName"],
+            "description": response["description"],
+            "processorArchitecture": response["processorArchitecture"],
+            "osType": response["osType"],
+            "acrPath": response["acrPath"],
+            "createdOn": response["createdTimeStamp"],
+            "modifiedOn": response["modifiedTimeStamp"],
+            "status": response["operationStatus"],
+            "statusMessage": response["operationStatusMessage"],
         }
 
         if test:
@@ -140,7 +145,12 @@ def create_exportedbrain(
         click.echo(dumps(json_response, indent=4))
 
     else:
-        click.echo(status_message)
+        click.echo("Name: {}".format(response["name"]))
+        click.echo("Display Name: {}".format(response["displayName"]))
+        click.echo("Description: {}".format(response["description"]))
+        click.echo("Acr Path: {}".format(response["acrPath"]))
+        click.echo("Status: {}".format(response["operationStatus"]))
+        click.echo("Created On: {}".format(response["createdTimeStamp"]))
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -251,11 +261,13 @@ def show_exportedbrain(
             "name": response["name"],
             "displayName": response["displayName"],
             "description": response["description"],
+            "processorArchitecture": response["processorArchitecture"],
+            "osType": response["osType"],
+            "acrPath": response["acrPath"],
             "createdOn": response["createdTimeStamp"],
             "modifiedOn": response["modifiedTimeStamp"],
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": "",
+            "status": response["operationStatus"],
+            "statusMessage": response["operationStatusMessage"],
         }
 
         if test:
@@ -268,6 +280,8 @@ def show_exportedbrain(
         click.echo("Name: {}".format(response["name"]))
         click.echo("Display Name: {}".format(response["displayName"]))
         click.echo("Description: {}".format(response["description"]))
+        click.echo("Acr Path: {}".format(response["acrPath"]))
+        click.echo("Status: {}".format(response["operationStatus"]))
         click.echo("Created On: {}".format(response["createdTimeStamp"]))
         click.echo("Modified On: {}".format(response["modifiedTimeStamp"]))
 

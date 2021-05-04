@@ -12,7 +12,7 @@ from configparser import RawConfigParser, NoSectionError
 from os.path import expanduser, join
 from argparse import ArgumentParser
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Set
 from urllib.parse import urlparse
 
 from .logger import Logger
@@ -113,7 +113,7 @@ class Config(object):
         self.verbose = False
         self.record_file = None
         self.record_enabled = False
-        self.file_paths = set()
+        self.file_paths: Set[str] = set()
         self._config_parser = RawConfigParser(allow_no_value=True)
         self._read_config()
         self.profile = profile

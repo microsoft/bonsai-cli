@@ -4,7 +4,7 @@ This file contains the code for commands that target a bonsai brain version in v
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import click
 from json import dumps
 from tabulate import tabulate
@@ -14,10 +14,11 @@ from bonsai_cli.utils import (
     api,
     get_latest_brain_version,
     get_version_checker,
+    raise_204_click_exception,
     raise_as_click_exception,
+    raise_client_side_click_exception,
     raise_brain_server_error_as_click_exception,
     raise_not_found_as_click_exception,
-    raise_client_side_click_exception,
 )
 
 
@@ -91,6 +92,26 @@ def create_brain_version(
             output=output,
         )
 
+        status_message = "Copied {} version {} to version {}.".format(
+            name, response["sourceVersion"], response["version"]
+        )
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -108,25 +129,10 @@ def create_brain_version(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "Copied {} version {} to version {}.".format(
-        name, response["sourceVersion"], response["version"]
-    )
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -179,6 +185,35 @@ def show_brain_version(
             name, version, workspace=workspace_id, debug=debug, output=output
         )
 
+        if output == "json":
+            json_response = {
+                "version": response["version"],
+                "trainingState": response["state"],
+                "assessmentState": response["assessmentState"],
+                "notes": response["description"],
+                "createdOn": response["createdOn"],
+                "modifiedOn": response["modifiedOn"],
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": "",
+            }
+
+            if test:
+                json_response["concepts"] = response["concepts"]
+                json_response["simulators"] = response["simulators"]
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo("Version: {}".format(response["version"]))
+            click.echo("Training State: {}".format(response["state"]))
+            click.echo("Assessment State: {}".format(response["assessmentState"]))
+            click.echo("Notes: {}".format(response["description"]))
+            click.echo("Created On: {}".format(response["createdOn"]))
+            click.echo("Modified On: {}".format(response["modifiedOn"]))
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -196,34 +231,10 @@ def show_brain_version(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if output == "json":
-        json_response = {
-            "version": response["version"],
-            "trainingState": response["state"],
-            "assessmentState": response["assessmentState"],
-            "notes": response["description"],
-            "createdOn": response["createdOn"],
-            "modifiedOn": response["modifiedOn"],
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": "",
-        }
-
-        if test:
-            json_response["concepts"] = response["concepts"]
-            json_response["simulators"] = response["simulators"]
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo("Version: {}".format(response["version"]))
-        click.echo("Training State: {}".format(response["state"]))
-        click.echo("Assessment State: {}".format(response["assessmentState"]))
-        click.echo("Notes: {}".format(response["description"]))
-        click.echo("Created On: {}".format(response["createdOn"]))
-        click.echo("Modified On: {}".format(response["modifiedOn"]))
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -283,6 +294,24 @@ def update_brain_version(
             output=output,
         )
 
+        status_message = "Updated {} version {}.".format(name, response["version"])
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -300,23 +329,10 @@ def update_brain_version(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "Updated {} version {}.".format(name, response["version"])
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -362,6 +378,46 @@ def list_brain_version(
             name, workspace=workspace_id, debug=debug, output=output
         )
 
+        rows: List[Any] = []
+        dict_rows: List[Dict[str, Any]] = []
+        for item in response["value"]:
+            try:
+                version = item["version"]
+                training_state = item["state"]
+                assessment_state = item["assessmentState"]
+                rows.append([version, training_state, assessment_state])
+                dict_rows.append(
+                    {
+                        "version": version,
+                        "trainingState": training_state,
+                        "assessmentState": assessment_state,
+                    }
+                )
+            except KeyError:
+                pass  # If it's missing a field, ignore it.
+
+        if output == "json":
+            json_response = {
+                "value": dict_rows,
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": "",
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            table = tabulate(
+                rows,
+                headers=["Version", "Training State", "Assessment State"],
+                tablefmt="orgtbl",
+            )
+            click.echo(table)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -379,45 +435,10 @@ def list_brain_version(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    rows = []
-    dict_rows = []
-    for item in response["value"]:
-        try:
-            version = item["version"]
-            training_state = item["state"]
-            assessment_state = item["assessmentState"]
-            rows.append([version, training_state, assessment_state])
-            dict_rows.append(
-                {
-                    "version": version,
-                    "trainingState": training_state,
-                    "assessmentState": assessment_state,
-                }
-            )
-        except KeyError:
-            pass  # If it's missing a field, ignore it.
-
-    if output == "json":
-        json_response = {
-            "value": dict_rows,
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": "",
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        table = tabulate(
-            rows,
-            headers=["Version", "Training State", "Assessment State"],
-            tablefmt="orgtbl",
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
         )
-        click.echo(table)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -464,6 +485,11 @@ def delete_brain_version(
     if not name:
         raise_as_click_exception("\nName of the brain is required")
 
+    if not version:
+        version = get_latest_brain_version(
+            name, "Delete brain version", debug, output, test
+        )
+
     is_delete = False
 
     if yes:
@@ -488,18 +514,13 @@ def delete_brain_version(
             raise_as_click_exception("\nPlease respond with 'y' or 'n'")
 
     if is_delete:
-        if not version:
-            version = get_latest_brain_version(
-                name, "Delete brain version", debug, output, test
-            )
-
         try:
             response = api(use_aad=True).delete_brain_version(
                 name, version=version, workspace=workspace_id, debug=debug
             )
 
             if response["statusCode"] == 204:
-                raise_client_side_click_exception(
+                raise_204_click_exception(
                     debug,
                     output,
                     test,
@@ -508,29 +529,29 @@ def delete_brain_version(
                     response,
                 )
 
+            status_message = "Deleted {} version {}.".format(name, version)
+
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                if test:
+                    json_response["elapsed"] = str(response["elapsed"])
+                    json_response["timeTaken"] = str(response["timeTaken"])
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
+
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
         except AuthenticationError as e:
             raise_as_click_exception(e)
-
-        status_message = "Deleted {} version {}.".format(name, version)
-
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            if test:
-                json_response["elapsed"] = str(response["elapsed"])
-                json_response["timeTaken"] = str(response["timeTaken"])
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -598,6 +619,12 @@ def update_inkling(
             name, version, workspace=workspace_id, debug=debug, output=output
         )
 
+        if get_brain_version_response["state"] == "Active":
+            raise_as_click_exception("Cannot update inkling when training is active")
+
+        if get_brain_version_response["assessmentState"] == "Active":
+            raise_as_click_exception("Cannot update inkling when assessment is active")
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -615,11 +642,10 @@ def update_inkling(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if get_brain_version_response["state"] == "Active":
-        raise_as_click_exception("Cannot update inkling when training is active")
-
-    if get_brain_version_response["assessmentState"] == "Active":
-        raise_as_click_exception("Cannot update inkling when assessment is active")
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     try:
         f = open(file, "r")
@@ -639,31 +665,36 @@ def update_inkling(
             output=output,
         )
 
+        status_message = "Uploaded {} to {} version {}.".format(
+            file, name, response["version"]
+        )
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "Uploaded {} to {} version {}.".format(
-        file, name, response["version"]
-    )
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -718,6 +749,49 @@ def get_inkling(
             name, version, workspace=workspace_id, debug=debug, output=output
         )
 
+        if len(response["inkling"]) == 0:
+            raise_as_click_exception("Inkling is not set")
+
+        if file:
+            f = open(file, "w+")
+            f.write(response["inkling"])
+            f.close()
+
+            status_message = "Inkling saved from {} version {} to {}.".format(
+                name, response["version"], file
+            )
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                if test:
+                    json_response["elapsed"] = str(response["elapsed"])
+                    json_response["timeTaken"] = str(response["timeTaken"])
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
+        else:
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "inkling": response["inkling"],
+                }
+
+                if test:
+                    json_response["elapsed"] = str(response["elapsed"])
+                    json_response["timeTaken"] = str(response["timeTaken"])
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(response["inkling"])
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -735,48 +809,10 @@ def get_inkling(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if len(response["inkling"]) == 0:
-        raise_as_click_exception("Inkling is not set")
-
-    if file:
-        f = open(file, "w+")
-        f.write(response["inkling"])
-        f.close()
-
-        status_message = "Inkling saved from {} version {} to {}.".format(
-            name, response["version"], file
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
         )
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            if test:
-                json_response["elapsed"] = str(response["elapsed"])
-                json_response["timeTaken"] = str(response["timeTaken"])
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
-    else:
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "inkling": response["inkling"],
-            }
-
-            if test:
-                json_response["elapsed"] = str(response["elapsed"])
-                json_response["timeTaken"] = str(response["timeTaken"])
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(response["inkling"])
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -858,6 +894,15 @@ def start_training(
             show_brain_version_response = api(use_aad=True).get_brain_version(
                 name, version, workspace=workspace_id, debug=debug, output=output
             )
+
+            if len(show_brain_version_response["concepts"]) > 0:
+                concept_name = show_brain_version_response["concepts"][0]["name"]
+
+            else:
+                raise_as_click_exception(
+                    "Concept name not provided and no concept name found in inkling"
+                )
+
         except BrainServerError as e:
             if e.exception["statusCode"] == 404:
                 raise_not_found_as_click_exception(
@@ -875,12 +920,9 @@ def start_training(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        if len(show_brain_version_response["concepts"]) > 0:
-            concept_name = show_brain_version_response["concepts"][0]["name"]
-
-        else:
-            raise_as_click_exception(
-                "Concept name not provided and no concept name found in inkling"
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
             )
 
     if instance_count and not simulator_package_name:
@@ -906,6 +948,19 @@ def start_training(
                 debug=debug,
                 output=output,
             )
+
+            cores_per_instance = show_simulator_package_response["coresPerInstance"]
+            memory_in_gb_per_instance = show_simulator_package_response[
+                "memInGbPerInstance"
+            ]
+            min_instance_count = show_simulator_package_response["minInstanceCount"]
+            max_instance_count = show_simulator_package_response["maxInstanceCount"]
+            auto_scaling = show_simulator_package_response["autoScale"]
+            auto_termination = show_simulator_package_response["autoTerminate"]
+
+            if not instance_count:
+                instance_count = show_simulator_package_response["startInstanceCount"]
+
         except BrainServerError as e:
             if e.exception["statusCode"] == 404:
                 raise_not_found_as_click_exception(
@@ -923,17 +978,10 @@ def start_training(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        cores_per_instance = show_simulator_package_response["coresPerInstance"]
-        memory_in_gb_per_instance = show_simulator_package_response[
-            "memInGbPerInstance"
-        ]
-        min_instance_count = show_simulator_package_response["minInstanceCount"]
-        max_instance_count = show_simulator_package_response["maxInstanceCount"]
-        auto_scaling = show_simulator_package_response["autoScale"]
-        auto_termination = show_simulator_package_response["autoTerminate"]
-
-        if not instance_count:
-            instance_count = show_simulator_package_response["startInstanceCount"]
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
         try:
             api(use_aad=True).create_sim_collection(
@@ -960,8 +1008,17 @@ def start_training(
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
+        except AuthenticationError as e:
+            raise_as_click_exception(e)
+
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
+
     try:
         concept_names: Optional[List[str]] = [concept_name] if concept_name else None
+
         response = api(use_aad=True).start_training(
             name,
             version=version,
@@ -969,6 +1026,20 @@ def start_training(
             debug=debug,
             concept_names=concept_names,
         )
+
+        status_message = "{} version {} training started.".format(name, version)
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
 
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
@@ -987,19 +1058,10 @@ def start_training(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} version {} training started.".format(name, version)
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1051,6 +1113,22 @@ def stop_training(
             name, version=version, workspace=workspace_id, debug=debug
         )
 
+        status_message = "{} version {} training stopped.".format(
+            name, response["version"]
+        )
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -1068,19 +1146,10 @@ def stop_training(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} version {} training stopped.".format(name, response["version"])
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1217,6 +1286,20 @@ def start_logging(
                 debug=debug,
             )
 
+            status_message = "{} version {} logging started.".format(name, version)
+
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
+
         except BrainServerError as e:
             if e.exception["statusCode"] == 404:
                 raise_not_found_as_click_exception(
@@ -1238,19 +1321,10 @@ def start_logging(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        status_message = "{} version {} logging started.".format(name, version)
-
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1332,6 +1406,20 @@ def stop_logging(
             debug=debug,
         )
 
+        status_message = "{} version {} logging stopped.".format(name, version)
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -1349,19 +1437,10 @@ def stop_logging(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} version {} logging stopped.".format(name, version)
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1458,7 +1537,10 @@ def reset_training(
             name, "Reset-training brain version", debug, output, test
         )
 
-    is_delete = False
+    is_reset = False
+
+    if yes:
+        is_reset = True
 
     if not yes:
         click.echo(
@@ -1472,13 +1554,13 @@ def reset_training(
         no_set = {"no", "n"}
 
         if choice in yes_set:
-            is_delete = True
+            is_reset = True
         elif choice in no_set:
-            is_delete = False
+            is_reset = False
         else:
             raise_as_click_exception("\nPlease respond with 'y' or 'n'")
 
-    if is_delete:
+    if is_reset:
         try:
             response = api(use_aad=True).reset_training(
                 name,
@@ -1489,6 +1571,22 @@ def reset_training(
                 workspace=workspace_id,
                 debug=debug,
             )
+
+            status_message = "{} version {} training reset.".format(
+                name, response["version"]
+            )
+
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
 
         except BrainServerError as e:
             if e.exception["statusCode"] == 404:
@@ -1507,21 +1605,10 @@ def reset_training(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        status_message = "{} version {} training reset.".format(
-            name, response["version"]
-        )
-
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1588,41 +1675,19 @@ def start_assessing(
                 name, version, workspace=workspace_id, debug=debug, output=output
             )
 
+            if len(show_brain_version_response["concepts"]) > 0:
+                concept_name = show_brain_version_response["concepts"][0]["name"]
+
+            else:
+                raise_as_click_exception(
+                    "Concept name not provided and no concept name found in inkling"
+                )
+
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
         except AuthenticationError as e:
             raise_as_click_exception(e)
-
-        if len(show_brain_version_response["concepts"]) > 0:
-            concept_name = show_brain_version_response["concepts"][0]["name"]
-
-        else:
-            raise_as_click_exception(
-                "Concept name not provided and no concept name found in inkling"
-            )
-
-    try:
-        response = api(use_aad=True).start_assessment(
-            name, version=version, workspace=workspace_id, debug=debug
-        )
-
-    except BrainServerError as e:
-        if e.exception["statusCode"] == 404:
-            raise_not_found_as_click_exception(
-                debug,
-                output,
-                "Start-assessing brain version",
-                "Brain '{}' version".format(name),
-                "{}".format(version),
-                test,
-                e,
-            )
-        else:
-            raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-    except AuthenticationError as e:
-        raise_as_click_exception(e)
 
     if simulator_package_name:
         try:
@@ -1632,6 +1697,19 @@ def start_assessing(
                 debug=debug,
                 output=output,
             )
+
+            cores_per_instance = show_simulator_package_response["coresPerInstance"]
+            memory_in_gb_per_instance = show_simulator_package_response[
+                "memInGbPerInstance"
+            ]
+            min_instance_count = show_simulator_package_response["minInstanceCount"]
+            max_instance_count = show_simulator_package_response["maxInstanceCount"]
+            auto_scaling = show_simulator_package_response["autoScale"]
+            auto_termination = show_simulator_package_response["autoTerminate"]
+
+            if not instance_count:
+                instance_count = show_simulator_package_response["startInstanceCount"]
+
         except BrainServerError as e:
             if e.exception["statusCode"] == 404:
                 raise_not_found_as_click_exception(
@@ -1649,17 +1727,10 @@ def start_assessing(
         except AuthenticationError as e:
             raise_as_click_exception(e)
 
-        cores_per_instance = show_simulator_package_response["coresPerInstance"]
-        memory_in_gb_per_instance = show_simulator_package_response[
-            "memInGbPerInstance"
-        ]
-        min_instance_count = show_simulator_package_response["minInstanceCount"]
-        max_instance_count = show_simulator_package_response["maxInstanceCount"]
-        auto_scaling = show_simulator_package_response["autoScale"]
-        auto_termination = show_simulator_package_response["autoTerminate"]
-
-        if not instance_count:
-            instance_count = show_simulator_package_response["startInstanceCount"]
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
         try:
             api(use_aad=True).create_sim_collection(
@@ -1686,19 +1757,54 @@ def start_assessing(
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
-    status_message = "{} version {} assessing started.".format(name, version)
+        except AuthenticationError as e:
+            raise_as_click_exception(e)
 
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
-        click.echo(dumps(json_response, indent=4))
+        try:
+            response = api(use_aad=True).start_assessment(
+                name, version=version, workspace=workspace_id, debug=debug
+            )
 
-    else:
-        click.echo(status_message)
+            status_message = "{} version {} assessing started.".format(name, version)
+
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
+
+        except BrainServerError as e:
+            if e.exception["statusCode"] == 404:
+                raise_not_found_as_click_exception(
+                    debug,
+                    output,
+                    "Start-assessing brain version",
+                    "Brain '{}' version".format(name),
+                    "{}".format(version),
+                    test,
+                    e,
+                )
+            else:
+                raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+        except AuthenticationError as e:
+            raise_as_click_exception(e)
+
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1750,6 +1856,22 @@ def stop_assessing(
             name, version=version, workspace=workspace_id, debug=debug
         )
 
+        status_message = "{} version {} assessing stopped.".format(
+            name, response["version"]
+        )
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_not_found_as_click_exception(
@@ -1767,21 +1889,10 @@ def stop_assessing(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} version {} assessing stopped.".format(
-        name, response["version"]
-    )
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

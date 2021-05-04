@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "recipe": {},
+  "episodeConfigurations": [
+    {
+      "position": 0.0,
+      "velocity": 0.0,
+      "angle": 0.0,
+      "rotation": 0.0
+    }
+  ]
+}
