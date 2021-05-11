@@ -127,7 +127,7 @@ class Config(object):
             self.accesskey = self.aad_client.get_access_token()
 
     def __repr__(self):
-        """ Prints out a JSON formatted string of the Config state. """
+        """Prints out a JSON formatted string of the Config state."""
         return (
             "{{"
             '"profile": "{self.profile!r}", '
@@ -142,7 +142,7 @@ class Config(object):
         )
 
     def _parse_config(self, profile: Optional[str]):
-        """ parse both the '~/.bonsaiconfig' and './.bonsaiconfig' config files. """
+        """parse both the '~/.bonsaiconfig' and './.bonsaiconfig' config files."""
 
         # read the values
         def assign_key(key: str):
@@ -176,7 +176,7 @@ class Config(object):
             self.url = "https://{}".format(self.url)
 
     def _parse_args(self, argv: List[str]):
-        """ parser command line arguments """
+        """parser command line arguments"""
         if sys.version_info >= (3, 0):
             parser = ArgumentParser(allow_abbrev=False)
         else:
@@ -269,7 +269,7 @@ class Config(object):
             self._config_parser.set(_DEFAULT, _PROFILE, str(section))
 
     def _write_dot_bonsaiconfig(self):
-        """ Writes to .bonsaiconfig in users home directory """
+        """Writes to .bonsaiconfig in users home directory"""
         config_path = join(expanduser("~"), _DOT_BONSAI)
         try:
             with open(config_path, "w") as f:
@@ -286,15 +286,15 @@ class Config(object):
         return self._config_parser.has_section(section)
 
     def section_list(self):
-        """ Returns a list of sections in config """
+        """Returns a list of sections in config"""
         return self._config_parser.sections()
 
     def section_items(self, section: str):
-        """ Returns a dictionary of items in a section """
+        """Returns a dictionary of items in a section"""
         return self._config_parser.items(section)
 
     def defaults(self):
-        """ Returns an ordered dict of items in the DEFAULT section """
+        """Returns an ordered dict of items in the DEFAULT section"""
         return self._config_parser.defaults()
 
     def update(self, **kwargs: Any):
