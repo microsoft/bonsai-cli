@@ -68,7 +68,7 @@ def _sysinfo(ctx: click.Context, value: str):
 
 
 def _set_color(ctx: click.Context, value: str):
-    """ Set use_color flag in bonsai config """
+    """Set use_color flag in bonsai config"""
     if value is None or ctx.resilient_parsing:
         return
 
@@ -260,7 +260,7 @@ def cli(ctx: click.Context, timeout: int, disable_version_check: bool):
 @click.command("help")
 @click.pass_context
 def bonsai_help(ctx: click.Context):
-    """ Show this message and exit. """
+    """Show this message and exit."""
     version_checker = get_version_checker(ctx, interactive=True)
     assert ctx.parent is not None
     click.echo(ctx.parent.get_help())

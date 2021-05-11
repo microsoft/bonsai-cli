@@ -53,9 +53,15 @@ def assessment():
 @click.option("--display-name", help="Display name of the assessment.")
 @click.option("--description", "-des", help="Description for the assessment.")
 @click.option(
+    "--timeout",
+    help="Timeout window after which the assessment will stop. Defaults to 24 hours, maximum possible value is 7 days. "
+    "Format should be <duration><unit>. Units can be days (d), hours (h), or minutes (m), defaults to hours.",
+)
+@click.option(
     "--maximum-duration",
     help="Maximum time duration the assessment should run for. Defaults to 24 hours, maximum allowed duration is 7 days. "
     "Format should be <duration><unit>. Units can be days (d), hours (h), or minutes (m), defaults to hours.",
+    hidden=True,
 )
 @click.option(
     "--episode-iteration-limit",
@@ -98,6 +104,7 @@ def start_assessment(
     name: str,
     display_name: str,
     description: str,
+    timeout: str,
     maximum_duration: str,
     episode_iteration_limit: int,
     simulator_package_name: str,
@@ -124,22 +131,23 @@ def start_assessment(
         required_options_provided = False
         error_msg += "\nPath to JSON assessment configuration file is required"
 
-    if not maximum_duration:
-        maximum_duration = str(24)
+    if not timeout:
+        if maximum_duration:
+            timeout = maximum_duration
+        else:
+            timeout = str(24)
 
-    maximum_duration_in_minutes = 0
+    timeout_in_minutes = 0
 
-    if maximum_duration:
-        duration = parse_duration(maximum_duration)
+    if timeout:
+        duration = parse_duration(timeout)
 
         if duration:
-            maximum_duration_in_minutes = (duration.days * 1440) + int(
-                duration.seconds / 60
-            )
+            timeout_in_minutes = (duration.days * 1440) + int(duration.seconds / 60)
 
         else:
             required_options_provided = False
-            error_msg += "\nInvalid format for maximum_duration. Please use suffix 'm' if specifying in minutes OR suffix 'h' if specifying in hours OR suffix 'd' if specifying in days."
+            error_msg += "\nInvalid format for timeout. Please use suffix 'm' if specifying in minutes OR suffix 'h' if specifying in hours OR suffix 'd' if specifying in days."
 
     if not required_options_provided:
         raise_as_click_exception(error_msg)
@@ -177,37 +185,6 @@ def start_assessment(
 
     if not name:
         name = brain_name + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-
-    try:
-        response = api(use_aad=True).start_assessmentv2(
-            name=name,
-            brain_name=brain_name,
-            version=brain_version,
-            concept_name=concept_name,
-            scenarios=configuration,
-            episode_iteration_limit=episode_iteration_limit,
-            maximum_duration_in_minutes=maximum_duration_in_minutes,
-            display_name=display_name,
-            description=description,
-            workspace=workspace_id,
-            debug=debug,
-        )
-
-    except BrainServerError as e:
-        if "Unique index constraint violation" in str(e):
-            raise_unique_constraint_violation_as_click_exception(
-                debug, output, "Assessment", name, test, e
-            )
-        else:
-            raise_as_click_exception(e)
-
-    except AuthenticationError as e:
-        raise_as_click_exception(e)
-
-    except Exception as e:
-        raise_client_side_click_exception(
-            output, test, "{}: {}".format(type(e), e.args)
-        )
 
     if simulator_package_name:
         try:
@@ -274,26 +251,6 @@ def start_assessment(
                 debug=debug,
             )
 
-            status_message = "Started assessment {} of brain {} version {}.".format(
-                response["name"], brain_name, brain_version
-            )
-
-            if output == "json":
-                json_response = {
-                    "status": response["status"],
-                    "statusCode": response["statusCode"],
-                    "statusMessage": status_message,
-                }
-
-                if test:
-                    json_response["elapsed"] = str(response["elapsed"])
-                    json_response["timeTaken"] = str(response["timeTaken"])
-
-                click.echo(dumps(json_response, indent=4))
-
-            else:
-                click.echo(status_message)
-
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
@@ -304,6 +261,57 @@ def start_assessment(
             raise_client_side_click_exception(
                 output, test, "{}: {}".format(type(e), e.args)
             )
+
+    try:
+        response = api(use_aad=True).start_assessmentv2(
+            name=name,
+            brain_name=brain_name,
+            version=brain_version,
+            concept_name=concept_name,
+            scenarios=configuration,
+            episode_iteration_limit=episode_iteration_limit,
+            maximum_duration_in_minutes=timeout_in_minutes,
+            display_name=display_name,
+            description=description,
+            workspace=workspace_id,
+            debug=debug,
+        )
+
+        status_message = "Started assessment {} of brain {} version {}.".format(
+            response["name"], brain_name, brain_version
+        )
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
+    except BrainServerError as e:
+        if "Unique index constraint violation" in str(e):
+            raise_unique_constraint_violation_as_click_exception(
+                debug, output, "Assessment", name, test, e
+            )
+        else:
+            raise_as_click_exception(e)
+
+    except AuthenticationError as e:
+        raise_as_click_exception(e)
+
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     brain_version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -1086,12 +1094,12 @@ def get_assessment_status(state: str):
 
     if state.lower() == "active":
         status = "In progress"
-    elif (
-        state.lower() == "cancelled"
-        or state.lower() == "complete"
-        or state.lower() == "deadlineexceeded"
-    ):
-        status = "Complete"
+    elif state.lower() == "cancelled":
+        status = "Stopped"
+    elif state.lower() == "complete":
+        status = "Completed"
+    elif state.lower() == "deadlineexceeded":
+        status = "Timed out"
     elif state.lower() == "error":
         status = "Error"
 

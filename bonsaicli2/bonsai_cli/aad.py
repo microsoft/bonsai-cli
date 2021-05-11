@@ -102,7 +102,7 @@ class AADClient(object):
         )
 
     def _get_access_token_from_cache(self):
-        """ This also does a token refresh if the access token has expired. """
+        """This also does a token refresh if the access token has expired."""
         result = None
         accounts = self._app.get_accounts()
         if accounts:

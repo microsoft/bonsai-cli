@@ -869,6 +869,9 @@ class BonsaiAPI(object):
             ObjectType=[_BRAIN_VERSION_OBJECT, _INKLING_OBJECT],
         )
 
+        data = {"draftInkling": inkling}
+        self._patch(url=url, data=data, debug=debug, output=output)
+
         data = {"inkling": inkling}
         return self._patch(url=url, data=data, debug=debug, output=output, event=event)
 

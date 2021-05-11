@@ -261,14 +261,14 @@ class NullCliVersionChecker(CliVersionCheckerInterface):
 
 
 class CustomClickException(click.ClickException):
-    """ Custom click exception that prints exceptions in color """
+    """Custom click exception that prints exceptions in color"""
 
     def __init__(self, message: str, color: bool):
         click.ClickException.__init__(self, message)
         self.color = color
 
     def show(self, file: Optional[str] = None):
-        """ Override ClickException function show() to print in color """
+        """Override ClickException function show() to print in color"""
         if file is None:
             file = get_text_stderr()
 
@@ -319,7 +319,7 @@ def list_profiles(config: Config):
 
 
 def print_profile_information(config: Config):
-    """ Print current active profile information """
+    """Print current active profile information"""
     try:
         profile: Any = config.profile
         profile_info = config.section_items(profile)
