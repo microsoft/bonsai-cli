@@ -28,7 +28,7 @@ setup(
     ],
     keywords="bonsai",
     install_requires=[
-        "click>=7.1.2",
+        "click>=7.1.2, <8.0.0",
         "requests>=2.11",
         "tabulate>=0.7.5",
         "websocket-client>=0.40.0",
