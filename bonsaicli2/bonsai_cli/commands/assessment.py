@@ -76,7 +76,7 @@ def assessment():
     "--instance-count",
     "-i",
     type=int,
-    help="Number of simulator instances to perform assessment with, in the case of managed simulators",
+    help="Number of simulator instances to perform assessment with, in the case of managed simulators. A maximum of 20 simulator instances is allowed.",
 )
 @click.option(
     "--workspace-id",
@@ -186,6 +186,10 @@ def start_assessment(
     if not name:
         name = brain_name + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
+    instance_count_status_message = ""
+    custom_assessment_default_instances = 10
+    custom_assesment_max_instances = 20
+
     if simulator_package_name:
         try:
             show_simulator_package_response = api(use_aad=True).get_sim_package(
@@ -201,11 +205,32 @@ def start_assessment(
             ]
             min_instance_count = show_simulator_package_response["minInstanceCount"]
             max_instance_count = show_simulator_package_response["maxInstanceCount"]
-            auto_scaling = show_simulator_package_response["autoScale"]
+
+            if min_instance_count > custom_assesment_max_instances:
+                min_instance_count = custom_assesment_max_instances
+
+            if max_instance_count > custom_assesment_max_instances:
+                max_instance_count = custom_assesment_max_instances
+
+            """Autoscaling is set to false for assessment by default as per the requirement"""
+            auto_scaling = "false"
+
             auto_termination = show_simulator_package_response["autoTerminate"]
 
             if not instance_count:
-                instance_count = show_simulator_package_response["startInstanceCount"]
+                # If not set by user, set instance count to custom_assessment_default_instances,
+                # unless it is greater than max_instance_count or smaller than min_instance_count
+                instance_count = str(
+                    max(
+                        min_instance_count,
+                        min(max_instance_count, custom_assessment_default_instances),
+                    )
+                )
+            elif int(instance_count) > custom_assesment_max_instances:
+                instance_count = str(custom_assesment_max_instances)
+                instance_count_status_message = "A maximum of {s} simulator instances is allowed, your assessment will use {s} instances.".format(
+                    s=custom_assesment_max_instances
+                )
 
         except BrainServerError as e:
             if e.exception["statusCode"] == 404:
@@ -240,13 +265,13 @@ def start_assessment(
                 cores_per_instance=cores_per_instance,
                 memory_in_gb_per_instance=memory_in_gb_per_instance,
                 start_instance_count=instance_count,
-                min_instance_count=min_instance_count,
-                max_instance_count=max_instance_count,
+                min_instance_count=str(min_instance_count),
+                max_instance_count=str(max_instance_count),
                 auto_scaling=auto_scaling,
                 auto_termination=auto_termination,
-                log_session_count="0",
+                log_session_count=instance_count,
                 include_system_logs=False,
-                log_all_simulators=False,
+                log_all_simulators=True,
                 workspace=workspace_id,
                 debug=debug,
             )
@@ -277,8 +302,8 @@ def start_assessment(
             debug=debug,
         )
 
-        status_message = "Started assessment {} of brain {} version {}.".format(
-            response["name"], brain_name, brain_version
+        status_message = "{} Started assessment {} of brain {} version {}.".format(
+            instance_count_status_message, response["name"], brain_name, brain_version
         )
 
         if output == "json":
@@ -439,9 +464,10 @@ def list_assessment(
         raise_as_click_exception(e)
 
     except Exception as e:
-        raise_client_side_click_exception(
-            output, test, "{}: {}".format(type(e), e.args)
-        )
+        if e.args[0] != 0:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     brain_version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

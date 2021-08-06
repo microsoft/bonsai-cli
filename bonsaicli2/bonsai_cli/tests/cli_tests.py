@@ -7,6 +7,8 @@ __copyright__ = "Copyright 2021, Microsoft Corp."
 from click.testing import CliRunner
 from datetime import datetime, timezone
 import json
+import os
+import subprocess
 import time
 import unittest
 
@@ -17,8 +19,18 @@ runner = CliRunner()
 current_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
 
-class CliTests(unittest.TestCase):
+class TestCLI(unittest.TestCase):
     def setUp(self):
+        # Uncomment and populate empty value when testing CLI commands against prod endpoints before pypi release
+        # os.environ["SIM_WORKSPACE"] = "" # Workspace ID
+        # os.environ["TENANT_ID"] = "" # Tenant ID
+        # os.environ["URL"] = "https://cp-api.bons.ai"
+        # os.environ["GATEWAY_URL"] = "https://api.bons.ai"
+        # os.environ["SIM_API_HOST"] = "https://api.bons.ai"
+        # os.environ[
+        #     "SIM_ACCESS_KEY"
+        # ] = "" # Prod sim access key
+
         self.brain_name = "cli_brain_" + current_timestamp
         self.container_simulator_package_name = (
             "cli_container_simulator_package{}".format(current_timestamp)
@@ -27,20 +39,38 @@ class CliTests(unittest.TestCase):
             "cli_modelfile_simulator_package{}".format(current_timestamp)
         )
         self.assessment_name = "cli_assessment_{}".format(current_timestamp)
+        self.unmanaged_simulator_name = None
+        self.unmanaged_simulator_session_id = None
+        self.brain_version = 1
+        self.concept_name = "BalancePole"
+        self.action_name = "Train"
 
     def test_cli(self):
+        self.configure()
         self.brain_create()
+        self.start_unmanaged_sims()
         self.brain_show()
         self.brain_update()
         self.brain_list()
-        self.brain_version_copy()
         self.brain_version_show()
         self.brain_version_update()
         self.brain_version_list()
         self.brain_version_update_inkling()
         self.brain_version_get_inkling()
+        self.simulator_unmanaged_list()
+        self.simulator_unmanaged_show()
+        self.simulator_unmanaged_connect()
+
+        # TODO: start logging and stop logging are disabled since they are unstable. Command owners to investigate and enable
+        # TODO: IMPORTANT: Needs to be enabled when running the cli tests before pypi release
+        # self.brain_version_start_logging()
+        # self.brain_version_stop_logging()
         self.simulator_package_container_create()
-        self.simulator_package_modelfile_create()
+
+        # TODO: Since base image details are not present in database in BDE, modelfile create needs to be disabled till the command owner fixes this
+        # TODO: IMPORTANT: Needs to be enabled when running the cli tests before pypi release
+        # self.simulator_package_modelfile_create()
+
         self.simulator_package_modelfile_base_image_list()
         self.simulator_package_show()
         self.simulator_package_update()
@@ -55,9 +85,29 @@ class CliTests(unittest.TestCase):
         self.brain_version_assessment_delete()
         self.brain_version_stop_training()
         self.brain_version_reset_training()
+        self.brain_version_copy()
         self.brain_version_delete()
         self.simulator_package_remove()
         self.brain_delete()
+
+    def configure(self):
+        configure = (
+            "configure -w {} --tenant-id {} --url {} --gateway-url {} --test".format(
+                os.environ["SIM_WORKSPACE"],
+                os.environ["TENANT_ID"],
+                os.environ["URL"],
+                os.environ["GATEWAY_URL"],
+            )
+        )
+
+        response = runner.invoke(cli, configure).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(configure, response),
+        )
+
+        print("\n\n{} succeeded".format(configure))
 
     def brain_create(self):
         create_brain = "brain create -n {} -o json".format(self.brain_name)
@@ -74,6 +124,32 @@ class CliTests(unittest.TestCase):
         self.assertTrue(response["statusCode"] == 200)
 
         print("\n\n{} succeeded".format(create_brain))
+
+    def start_unmanaged_sims(self):
+        for x in range(16):
+            sim_context = (
+                f'{{"deploymentMode": "Testing", '
+                f'"purpose": {{ '
+                f'"action": "{self.action_name}", '
+                f'"target": {{ '
+                f'"workspaceName": "{os.environ["SIM_WORKSPACE"]}", '
+                f'"brainName": "{self.brain_name}", '
+                f'"brainVersion": "{self.brain_version}", '
+                f'"conceptName": "{self.concept_name}" }} }} }}'
+            )
+
+            command = subprocess.Popen(
+                [
+                    "python",
+                    "src/sdk3/samples/cartpole-py/cartpole.py",
+                    "--sim-context",
+                    sim_context,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            print(f"Starting local sim {x+1} with {command.args}")
 
     def brain_show(self):
         show_brain = "brain show -n {} -o json".format(self.brain_name)
@@ -236,18 +312,60 @@ class CliTests(unittest.TestCase):
 
         print("\n\n{} succeeded".format(get_inkling_brain_version))
 
+    def brain_version_start_logging(self):
+        start_logging_brain_version = (
+            "brain version start-logging -n {} -d {} -o json".format(
+                self.brain_name, self.unmanaged_simulator_session_id
+            )
+        )
+
+        response = runner.invoke(cli, start_logging_brain_version).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(
+                start_logging_brain_version, response
+            ),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(start_logging_brain_version))
+
+    def brain_version_stop_logging(self):
+        stop_logging_brain_version = (
+            "brain version stop-logging -n {} -d {} -o json".format(
+                self.brain_name, self.unmanaged_simulator_session_id
+            )
+        )
+
+        response = runner.invoke(cli, stop_logging_brain_version).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(
+                stop_logging_brain_version, response
+            ),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(stop_logging_brain_version))
+
     def simulator_package_container_create(self):
         create_simulator_package_container = (
             "simulator package container create "
             "--name {} "
-            "--instance-count 16  "
             "--cores-per-instance 1 "
             "--memory-in-gb-per-instance 1 "
             "--image-uri mcr.microsoft.com/bonsai/cartpoledemo:5 "
             "--os-type Linux "
             "--display-name {} "
             "--description {} "
-            "--min-instance-count 10 "
             "--max-instance-count 16 "
             "-o json".format(
                 self.container_simulator_package_name,
@@ -377,15 +495,84 @@ class CliTests(unittest.TestCase):
 
         print("\n\n{} succeeded".format(list_simulator_package))
 
-    def brain_version_start_training(self):
-        start_training_brain_version = (
-            "brain version start-training "
-            "-n {} "
-            "--simulator-package-name {} "
-            "-c BalancePole "
-            "--instance-count 16 "
-            "-o json".format(self.brain_name, self.container_simulator_package_name)
+    def simulator_unmanaged_list(self):
+        list_simulator_unmanaged = "simulator unmanaged list -o json"
+
+        # print("SLEEPING FOR 10 HOURS")
+        # time.sleep(36000)
+
+        response = runner.invoke(cli, list_simulator_unmanaged).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(list_simulator_unmanaged, response),
         )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        self.unmanaged_simulator_session_id = response["value"][0]["sessionId"]
+        self.unmanaged_simulator_name = response["value"][0]["name"]
+
+        print("\n\n{} succeeded".format(list_simulator_unmanaged))
+
+    def simulator_unmanaged_show(self):
+        show_simulator_unmanaged = "simulator unmanaged show -d {} -o json".format(
+            self.unmanaged_simulator_session_id
+        )
+
+        response = runner.invoke(cli, show_simulator_unmanaged).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(show_simulator_unmanaged, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(show_simulator_unmanaged))
+
+    def simulator_unmanaged_connect(self):
+        connect_simulator_unmanaged = "simulator unmanaged connect -b {} -a Train -c BalancePole -d {} -o json".format(
+            self.brain_name, self.unmanaged_simulator_session_id
+        )
+
+        response = runner.invoke(cli, connect_simulator_unmanaged).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(
+                connect_simulator_unmanaged, response
+            ),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(connect_simulator_unmanaged))
+
+    def brain_version_start_training(self):
+        if "BONSAI_IS_BDE" in os.environ:
+            start_training_brain_version = (
+                "brain version start-training "
+                "-n {} "
+                "-c BalancePole "
+                "-o json".format(self.brain_name)
+            )
+
+        else:
+            start_training_brain_version = (
+                "brain version start-training "
+                "-n {} "
+                "--simulator-package-name {} "
+                "-c BalancePole "
+                "--instance-count 16 "
+                "-o json".format(self.brain_name, self.container_simulator_package_name)
+            )
 
         response = runner.invoke(cli, start_training_brain_version).output
 
@@ -415,21 +602,36 @@ class CliTests(unittest.TestCase):
             "src/Services/bonsaicli2/bonsai_cli/tests/cartpole-assessment-config.json"
         )
 
-        start_brain_version_assessment = (
-            "brain version assessment start "
-            "-n {} "
-            "-b {} "
-            "-c BalancePole "
-            "--simulator-package-name {} "
-            "-f {} "
-            "--instance-count 16 "
-            "-o json".format(
-                self.assessment_name,
-                self.brain_name,
-                self.container_simulator_package_name,
-                assessment_config_file,
+        if "BONSAI_IS_BDE" in os.environ:
+            start_brain_version_assessment = (
+                "brain version assessment start "
+                "-n {} "
+                "-b {} "
+                "-c BalancePole "
+                "-f {} "
+                "-o json".format(
+                    self.assessment_name,
+                    self.brain_name,
+                    assessment_config_file,
+                )
             )
-        )
+
+        else:
+            start_brain_version_assessment = (
+                "brain version assessment start "
+                "-n {} "
+                "-b {} "
+                "-c BalancePole "
+                "--simulator-package-name {} "
+                "-f {} "
+                "--instance-count 16 "
+                "-o json".format(
+                    self.assessment_name,
+                    self.brain_name,
+                    self.container_simulator_package_name,
+                    assessment_config_file,
+                )
+            )
 
         response = runner.invoke(cli, start_brain_version_assessment).output
 

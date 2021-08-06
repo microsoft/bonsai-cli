@@ -43,17 +43,6 @@ def modelfile():
     help="[Required] The simulator base_image you would like to use. Run 'bonsai simulator package modelfile list-base-image' to get the list of accepted simulator base_images.",
 )
 @click.option(
-    "--instance-count",
-    "-i",
-    type=int,
-    help="Number of instances to start and perform training with the modelfile simulator package.",
-)
-@click.option(
-    "--min-instance-count",
-    type=int,
-    help="Minimum Number of instances to perform training with the modelfile simulator package.",
-)
-@click.option(
     "--max-instance-count",
     type=int,
     help="Maximum Number of instances to perform training with the modelfile simulator package.",
@@ -69,12 +58,6 @@ def modelfile():
     "-m",
     type=float,
     help="Memory in GB that should be allocated for each simulator instance.",
-)
-@click.option(
-    "--auto-scale",
-    type=bool,
-    help="Flag to indicate scale up or scale down simulators. By default, it is set to true",
-    default=True,
 )
 @click.option("--display-name", help="Display name of the modelfile simulator package.")
 @click.option("--description", help="Description for the modelfile simulator package.")
@@ -100,12 +83,9 @@ def create_modelfile_simulator_package(
     name: str,
     file: str,
     base_image: str,
-    instance_count: int,
-    min_instance_count: int,
     max_instance_count: int,
     cores_per_instance: float,
     memory_in_gb_per_instance: float,
-    auto_scale: bool,
     display_name: str,
     description: str,
     workspace_id: str,
@@ -151,12 +131,6 @@ def create_modelfile_simulator_package(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if not instance_count:
-        instance_count = get_sim_base_image_response["startInstanceCount"]
-
-    if not min_instance_count:
-        min_instance_count = get_sim_base_image_response["minInstanceCount"]
-
     if not max_instance_count:
         max_instance_count = get_sim_base_image_response["maxInstanceCount"]
 
@@ -198,14 +172,9 @@ def create_modelfile_simulator_package(
             name=name,
             model_file_path=upload_model_file_response["modelFileStoragePath"],
             model_base_image_name=base_image,
-            start_instance_count=instance_count,
-            min_instance_count=min_instance_count,
             max_instance_count=max_instance_count,
             cores_per_instance=cores_per_instance,
             memory_in_gb_per_instance=memory_in_gb_per_instance,
-            auto_scale=auto_scale,
-            # set auto terminate to true by default
-            auto_terminate=True,
             display_name=display_name,
             description=description,
             os_type="linux",
@@ -296,7 +265,6 @@ def list_base_image_modelfile_simulator_package(
                 cores_per_instance = item["coresPerInstanceRecommended"]
                 memory_in_gb_per_instance = item["memInGBPerInstanceRecommended"]
                 start_instance_count = item["startInstanceCount"]
-                min_instance_count = item["minInstanceCount"]
                 max_instance_count = item["maxInstanceCount"]
                 rows.append(
                     [
@@ -304,7 +272,6 @@ def list_base_image_modelfile_simulator_package(
                         cores_per_instance,
                         memory_in_gb_per_instance,
                         start_instance_count,
-                        min_instance_count,
                         max_instance_count,
                     ]
                 )
@@ -314,7 +281,6 @@ def list_base_image_modelfile_simulator_package(
                         "defaultCoresPerInstance": cores_per_instance,
                         "defaultMemoryInGBPerInstance": memory_in_gb_per_instance,
                         "defaultStartInstanceCount": start_instance_count,
-                        "defaultMinInstanceCount": min_instance_count,
                         "defaultMaxInstanceCount": max_instance_count,
                     }
                 )
@@ -343,7 +309,6 @@ def list_base_image_modelfile_simulator_package(
                     "Default Cores Per Instance",
                     "Default Memory in GB Per Instance",
                     "Default Start Instance Count",
-                    "Default Min Instance Count",
                     "Default Max Instance Count",
                 ],
                 tablefmt="orgtbl",

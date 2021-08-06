@@ -24,6 +24,7 @@ from bonsai_cli.utils import (
     print_profile_information,
     list_profiles,
     raise_as_click_exception,
+    raise_client_side_click_exception,
 )
 
 from .brain import brain
@@ -92,44 +93,75 @@ def _set_color(ctx: click.Context, value: str):
     is_flag=True,
     help="Prints active profile information. Workspace ID is not required when you want to only print active profile information.",
 )
+@click.option(
+    "--test",
+    is_flag=True,
+    help="Test mode. Behavior can change release to release and should be considered unsupported",
+    hidden=True,
+)
+@click.option("--url", "-u", default=None, help="Set the brain api url.", hidden=True)
+@click.option(
+    "--gateway-url", "-g", default=None, help="Set the brain gateway url.", hidden=True
+)
 @click.pass_context
 def configure(
     ctx: click.Context,
     workspace_id: str,
     tenant_id: Optional[str] = None,
     show: bool = False,
+    test: bool = False,
+    url: Optional[str] = None,
+    gateway_url: Optional[str] = None,
 ):
     version_checker = get_version_checker(ctx, interactive=True)
 
-    if show and not workspace_id:
-        bonsai_config = Config(use_aad=False)
+    try:
+        if test:
+            bonsai_config = Config(use_aad=False)
 
-        print_profile_information(bonsai_config)
-    else:
-        if not workspace_id:
-            raise_as_click_exception("Workspace ID is required")
+            args = {
+                "workspace_id": workspace_id,
+                "tenant_id": tenant_id,
+                "url": url,
+                "gateway_url": gateway_url,
+            }
 
-        cache_file = get_aad_cache_file()
+            bonsai_config.update(**args)
 
-        if os.path.exists(cache_file):
-            os.remove(cache_file)
+        elif show and not workspace_id:
+            bonsai_config = Config(use_aad=False)
 
-        bonsai_config = Config(use_aad=True)
-
-        args = {
-            "workspace_id": workspace_id,
-            "tenant_id": tenant_id,
-            "url": "https://cp-api.bons.ai",
-            "gateway_url": "https://api.bons.ai",
-        }
-
-        if bonsai_config.update(**args):
-            click.echo("Successfully configured")
-        else:
-            click.echo("Failed to configure")
-
-        if show:
             print_profile_information(bonsai_config)
+        else:
+            if not workspace_id:
+                raise_as_click_exception("Workspace ID is required")
+
+            cache_file = get_aad_cache_file()
+
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+
+            bonsai_config = Config(use_aad=True)
+
+            args = {
+                "workspace_id": workspace_id,
+                "tenant_id": tenant_id,
+                "url": "https://cp-api.bons.ai",
+                "gateway_url": "https://api.bons.ai",
+            }
+
+            if bonsai_config.update(**args):
+                click.echo("Successfully configured")
+            else:
+                click.echo("Failed to configure")
+
+            if show:
+                print_profile_information(bonsai_config)
+
+    except Exception as e:
+        raise_client_side_click_exception(
+            "json", test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

@@ -142,7 +142,7 @@ def show_simulator_package(
                     "acrUri": response["imagePath"],
                     "cores": response["coresPerInstance"],
                     "memory": response["memInGbPerInstance"],
-                    "instanceCount": response["startInstanceCount"],
+                    "maximumInstanceCount": response["maxInstanceCount"],
                 },
             }
 
@@ -154,7 +154,9 @@ def show_simulator_package(
             click.echo("ACR Uri: {}".format(response["imagePath"]))
             click.echo("Cores (in vCPU): {}".format(response["coresPerInstance"]))
             click.echo("Memory (in GB): {}".format(response["memInGbPerInstance"]))
-            click.echo("Instance Count: {}".format(response["startInstanceCount"]))
+            click.echo(
+                "Maximum Instance Count: {}".format(response["maxInstanceCount"])
+            )
 
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
@@ -184,10 +186,10 @@ def show_simulator_package(
 @click.command("update", short_help="Update information about a simulator package.")
 @click.option("--name", "-n", help="[Required] Name of the simulator package.")
 @click.option(
-    "--instance-count",
+    "--max-instance-count",
     "-i",
     type=int,
-    help="Number of instances to perform training with the simulator package.",
+    help="Maximum number of instances to perform training with the simulator package.",
 )
 @click.option(
     "--cores-per-instance",
@@ -223,7 +225,7 @@ def show_simulator_package(
 def update_simulator_package(
     ctx: click.Context,
     name: str,
-    instance_count: int,
+    max_instance_count: int,
     cores_per_instance: float,
     memory_in_gb_per_instance: float,
     display_name: str,
@@ -241,15 +243,11 @@ def update_simulator_package(
     try:
         response = api(use_aad=True).update_sim_package(
             name=name,
-            start_instance_count=instance_count,
             cores_per_instance=cores_per_instance,
             memory_in_gb_per_instance=memory_in_gb_per_instance,
             display_name=display_name,
             description=description,
-            min_instance_count=instance_count,
-            max_instance_count=instance_count,
-            auto_scale=False,
-            auto_terminate=True,
+            max_instance_count=max_instance_count,
             workspace=workspace_id,
             debug=debug,
             output=output,
@@ -359,9 +357,10 @@ def list_simulator_package(
         raise_as_click_exception(e)
 
     except Exception as e:
-        raise_client_side_click_exception(
-            output, test, "{}: {}".format(type(e), e.args)
-        )
+        if e.args[0] != 0:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

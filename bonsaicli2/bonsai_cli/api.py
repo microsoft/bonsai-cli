@@ -1085,13 +1085,9 @@ class BonsaiAPI(object):
     def create_sim_package(
         self,
         name: str,
-        start_instance_count: int,
-        min_instance_count: int,
         max_instance_count: int,
         cores_per_instance: float,
         memory_in_gb_per_instance: float,
-        auto_scale: bool,
-        auto_terminate: bool,
         image_path: Optional[str] = None,
         model_file_path: Optional[str] = None,
         model_base_image_name: Optional[str] = None,
@@ -1116,7 +1112,6 @@ class BonsaiAPI(object):
         )
 
         data = {
-            "startInstanceCount": start_instance_count,
             "coresPerInstance": cores_per_instance,
             "memInGbPerInstance": memory_in_gb_per_instance,
             "displayName": display_name,
@@ -1126,10 +1121,7 @@ class BonsaiAPI(object):
             "imagePath": image_path,
             "modelFilePath": model_file_path,
             "modelBaseImageName": model_base_image_name,
-            "minInstanceCount": min_instance_count,
             "maxInstanceCount": max_instance_count,
-            "autoScale": auto_scale,
-            "autoTerminate": auto_terminate,
         }
         return self._put(url=url, data=data, debug=debug, output=output, event=event)
 
@@ -1183,15 +1175,11 @@ class BonsaiAPI(object):
     def update_sim_package(
         self,
         name: str,
-        start_instance_count: int,
         cores_per_instance: float,
         memory_in_gb_per_instance: float,
         display_name: Optional[str] = None,
         description: Optional[str] = None,
-        min_instance_count: int = 1,
         max_instance_count: int = 1,
-        auto_scale: bool = False,
-        auto_terminate: bool = True,
         workspace: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
@@ -1213,15 +1201,11 @@ class BonsaiAPI(object):
         )
 
         data = {
-            "startInstanceCount": start_instance_count,
             "coresPerInstance": cores_per_instance,
             "memInGbPerInstance": memory_in_gb_per_instance,
             "displayName": display_name,
             "description": description,
-            "minInstanceCount": min_instance_count,
             "maxInstanceCount": max_instance_count,
-            "autoScale": auto_scale,
-            "autoTerminate": auto_terminate,
         }
         response = self._patch(
             url=url, data=data, debug=debug, output=output, event=event

@@ -561,7 +561,7 @@ def raise_client_side_click_exception(
         if test:
             message["Details"] = details
     else:
-        message = "CLI error occurred."
+        message = "Error: CLI error occurred."
 
     raise CustomClickException(str(dumps(message)), color=color)
 
@@ -572,6 +572,7 @@ def verify_required_configuration(bonsai_config: Config):
     If required configuration is missing, an appropriate error is
     raised as a ClickException.
     """
+
     messages: List[str] = []
     missing_config = False
 
@@ -579,10 +580,11 @@ def verify_required_configuration(bonsai_config: Config):
         messages.append("Your access key is not configured.")
         missing_config = True
 
-    if not bonsai_config.aad_client and not bonsai_config.workspace_id:
+    if not bonsai_config.workspace_id:
         messages.append("Your workspace_id is not confgured.")
         missing_config = True
 
     if missing_config:
         messages.append("Run 'bonsai configure' to update required configuration.")
-        raise click.ClickException("\n".join(messages))
+        click.secho("\n".join(messages), fg="red")
+        exit()
