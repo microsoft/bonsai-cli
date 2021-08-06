@@ -5,7 +5,6 @@ __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2021, Microsoft Corp."
 
 import click
-import math
 
 from json import dumps
 
@@ -53,26 +52,9 @@ def container():
     type=click.Choice(["Windows", "Linux"], case_sensitive=False),
 )
 @click.option(
-    "--instance-count",
-    "-i",
-    type=int,
-    help="Number of instances to start and perform training with the container simulator package.",
-)
-@click.option(
-    "--min-instance-count",
-    type=int,
-    help="Minimum Number of instances to perform training with the container simulator package.",
-)
-@click.option(
     "--max-instance-count",
     type=int,
     help="Maximum Number of instances to perform training with the container simulator package.",
-)
-@click.option(
-    "--auto-scale",
-    type=bool,
-    help="Flag to indicate scale up or scale down simulators. By default, it is set to true",
-    default=True,
 )
 @click.option("--display-name", help="Display name of the container simulator package.")
 @click.option("--description", help="Description for the container simulator package.")
@@ -97,12 +79,9 @@ def create_container_simulator_package(
     ctx: click.Context,
     name: str,
     image_uri: str,
-    instance_count: int,
-    min_instance_count: int,
     max_instance_count: int,
     cores_per_instance: float,
     memory_in_gb_per_instance: float,
-    auto_scale: bool,
     os_type: str,
     display_name: str,
     description: str,
@@ -139,56 +118,13 @@ def create_container_simulator_package(
     if not required_options_provided:
         raise_as_click_exception(error_msg)
 
-    # if autoscale is true, max_instance_count is mandatory and min instance count and max instance count must be greater than one.
-    # min instance count and start instance count, if not defined is set to max instance count divide by 4.(as per Product Requirement.)
-
-    # if autoscale is set to false, start_instance_count is mandatory and min_instance_count and max_instance_count must be set to start_instance_count
-
-    if auto_scale:
-        if not max_instance_count:
-            error_msg += "\nIf auto scale is true, maximum instance count(--max-instance-count) is required."
-            raise_as_click_exception(error_msg)
-
-        # if min_instance_count is less than 1, set it to minimum 1.
-        if not min_instance_count:
-            min_instance_count = max(math.floor(max_instance_count / 4), 1)
-
-        # if instance_count is less than 1, set it to minimum 1.
-        if not instance_count:
-            instance_count = max(math.floor(max_instance_count / 4), 1)
-    else:
-        if not instance_count:
-            error_msg += "\nIf auto scale is set to false, instance count(--instance-count) is required."
-            raise_as_click_exception(error_msg)
-
-        if min_instance_count or max_instance_count:
-            error_msg += "\nMinimum instance count(--min-instance-count) and maximum instance count(--max-instance-count) cannot be provided as an option in case of auto scale being set to false. Minimum instance count and maximum instance count will be internally set to the same value as start instance count(--instance-count)."
-            raise_as_click_exception(error_msg)
-
-        min_instance_count = max_instance_count = instance_count
-
-    # Range Validation for max count and start instance count
-
-    if max_instance_count < min_instance_count or max_instance_count < instance_count:
-        error_msg += "\nMaximum instance count(--max-instance-count) must be greater than or equal to minimum instance count(--min-instance-count) and instance count(--instance-count)."
-        raise_as_click_exception(error_msg)
-
-    if instance_count < min_instance_count:
-        error_msg += "\nInstance count(--instance-count) must be greater than or equal to minimum instance count(--min-instance-count). If not explicitly set, Instance count(--instance-count) by default is 0."
-        raise_as_click_exception(error_msg)
-
     try:
         response = api(use_aad=True).create_sim_package(
             name=name,
             image_path=image_uri,
-            start_instance_count=instance_count,
-            min_instance_count=min_instance_count,
             max_instance_count=max_instance_count,
             cores_per_instance=cores_per_instance,
             memory_in_gb_per_instance=memory_in_gb_per_instance,
-            auto_scale=auto_scale,
-            # set auto terminate to true by default
-            auto_terminate=True,
             display_name=display_name,
             description=description,
             os_type=os_type,

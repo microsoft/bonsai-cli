@@ -353,9 +353,10 @@ def list_brain(
         raise_as_click_exception(e)
 
     except Exception as e:
-        raise_client_side_click_exception(
-            output, test, "{}: {}".format(type(e), e.args)
-        )
+        if e.args[0] != 0:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

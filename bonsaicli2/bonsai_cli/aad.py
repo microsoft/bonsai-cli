@@ -32,6 +32,10 @@ def use_password_auth() -> bool:
     return "BONSAI_AAD_USER" in os.environ and "BONSAI_AAD_PASSWORD" in os.environ
 
 
+def use_fake_token() -> bool:
+    return "BONSAI_IS_BDE" in os.environ
+
+
 def get_aad_cache_file():
     # cache file should be written to home directory
     home = os.path.expanduser("~")
@@ -73,6 +77,7 @@ class AADClient(object):
                 self._app = PublicClientApplication(
                     _AAD_CLIENT_ID, authority=_AAD_AUTHORITY, token_cache=self.cache
                 )
+
                 if self._app:
                     break
             except ConnectionError as e:
@@ -115,6 +120,7 @@ class AADClient(object):
         return result
 
     def get_access_token(self):
+        """This is used to get the AAD access token"""
 
         # attempt to get token from cache
         token = self._get_access_token_from_cache()
@@ -122,12 +128,15 @@ class AADClient(object):
             return "Bearer {}".format(token["access_token"])
 
         # no token found in cache, user must sign in and try again
-        if use_password_auth():
-            self._log_in_with_password()
+        if use_fake_token():
+            token = {"access_token": "dummy"}
+        elif use_password_auth():
+            token = self._log_in_with_password()
         else:
             print("No access token found in cache, please sign in.")
             self._log_in_with_device_code()
-        token = self._get_access_token_from_cache()
+            token = self._get_access_token_from_cache()
+
         if token:
             return "Bearer {}".format(token["access_token"])
 
