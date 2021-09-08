@@ -189,7 +189,6 @@ def show_brain_version(
             json_response = {
                 "version": response["version"],
                 "trainingState": response["state"],
-                "assessmentState": response["assessmentState"],
                 "notes": response["description"],
                 "createdOn": response["createdOn"],
                 "modifiedOn": response["modifiedOn"],
@@ -209,7 +208,6 @@ def show_brain_version(
         else:
             click.echo("Version: {}".format(response["version"]))
             click.echo("Training State: {}".format(response["state"]))
-            click.echo("Assessment State: {}".format(response["assessmentState"]))
             click.echo("Notes: {}".format(response["description"]))
             click.echo("Created On: {}".format(response["createdOn"]))
             click.echo("Modified On: {}".format(response["modifiedOn"]))
@@ -384,15 +382,8 @@ def list_brain_version(
             try:
                 version = item["version"]
                 training_state = item["state"]
-                assessment_state = item["assessmentState"]
-                rows.append([version, training_state, assessment_state])
-                dict_rows.append(
-                    {
-                        "version": version,
-                        "trainingState": training_state,
-                        "assessmentState": assessment_state,
-                    }
-                )
+                rows.append([version, training_state])
+                dict_rows.append({"version": version, "trainingState": training_state})
             except KeyError:
                 pass  # If it's missing a field, ignore it.
 
@@ -413,7 +404,7 @@ def list_brain_version(
         else:
             table = tabulate(
                 rows,
-                headers=["Version", "Training State", "Assessment State"],
+                headers=["Version", "Training State"],
                 tablefmt="orgtbl",
             )
             click.echo(table)
@@ -621,9 +612,6 @@ def update_inkling(
 
         if get_brain_version_response["state"] == "Active":
             raise_as_click_exception("Cannot update inkling when training is active")
-
-        if get_brain_version_response["assessmentState"] == "Active":
-            raise_as_click_exception("Cannot update inkling when assessment is active")
 
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
@@ -1613,288 +1601,22 @@ def reset_training(
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
-@click.command("start-assessing", short_help="Start assessing a brain version.")
-@click.option("--name", "-n", help="[Required] Name of the brain.")
-@click.option(
-    "--version", type=int, help="Version to start assessing, defaults to latest."
+@click.command(
+    "start-assessing",
+    deprecated=True,
+    short_help="[DEPRECATED] Use 'bonsai brain version assessment start -h' to learn more about starting assessments",
 )
-@click.option(
-    "--simulator-package-name",
-    help="Simulator package to use for assessing in the case of managed simulators.",
+def start_assessing():
+    pass
+
+
+@click.command(
+    "stop-assessing",
+    deprecated=True,
+    short_help="[DEPRECATED] Use 'bonsai brain version assessment stop -h' to learn more about stopping assessments",
 )
-@click.option("--concept-name", "-c", help="Concept to assess.")
-@click.option(
-    "--instance-count",
-    "-i",
-    type=int,
-    help="Number of instances to perform assessing with.",
-)
-@click.option(
-    "--workspace-id",
-    "-w",
-    help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
-)
-@click.option(
-    "--debug", default=False, is_flag=True, help="Verbose logging for request."
-)
-@click.option("--output", "-o", help="Set output, only json supported.")
-@click.option(
-    "--test",
-    default=False,
-    is_flag=True,
-    help="Enhanced response for testing.",
-    hidden=True,
-)
-@click.pass_context
-def start_assessing(
-    ctx: click.Context,
-    name: str,
-    version: int,
-    simulator_package_name: str,
-    concept_name: str,
-    instance_count: str,
-    workspace_id: str,
-    debug: bool,
-    output: str,
-    test: bool,
-):
-
-    version_checker = get_version_checker(ctx, interactive=not output)
-
-    if not name:
-        raise_as_click_exception("\nName of the brain is required")
-
-    if not version:
-        version = get_latest_brain_version(
-            name, "Start-assessing brain version", debug, output, test
-        )
-
-    if not concept_name:
-        try:
-            show_brain_version_response = api(use_aad=True).get_brain_version(
-                name, version, workspace=workspace_id, debug=debug, output=output
-            )
-
-            if len(show_brain_version_response["concepts"]) > 0:
-                concept_name = show_brain_version_response["concepts"][0]["name"]
-
-            else:
-                raise_as_click_exception(
-                    "Concept name not provided and no concept name found in inkling"
-                )
-
-        except BrainServerError as e:
-            raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-        except AuthenticationError as e:
-            raise_as_click_exception(e)
-
-    if simulator_package_name:
-        try:
-            show_simulator_package_response = api(use_aad=True).get_sim_package(
-                simulator_package_name,
-                workspace=workspace_id,
-                debug=debug,
-                output=output,
-            )
-
-            cores_per_instance = show_simulator_package_response["coresPerInstance"]
-            memory_in_gb_per_instance = show_simulator_package_response[
-                "memInGbPerInstance"
-            ]
-            min_instance_count = show_simulator_package_response["minInstanceCount"]
-            max_instance_count = show_simulator_package_response["maxInstanceCount"]
-            auto_scaling = show_simulator_package_response["autoScale"]
-            auto_termination = show_simulator_package_response["autoTerminate"]
-
-            if not instance_count:
-                instance_count = show_simulator_package_response["startInstanceCount"]
-
-        except BrainServerError as e:
-            if e.exception["statusCode"] == 404:
-                raise_not_found_as_click_exception(
-                    debug,
-                    output,
-                    "Starting managed simulator",
-                    "Simulator package",
-                    simulator_package_name,
-                    test,
-                    e,
-                )
-            else:
-                raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-        except AuthenticationError as e:
-            raise_as_click_exception(e)
-
-        except Exception as e:
-            raise_client_side_click_exception(
-                output, test, "{}: {}".format(type(e), e.args)
-            )
-
-        try:
-            api(use_aad=True).create_sim_collection(
-                packagename=simulator_package_name,
-                brain_name=name,
-                brain_version=version,
-                purpose_action="Assess",
-                concept_name=concept_name,
-                description="desc",
-                cores_per_instance=cores_per_instance,
-                memory_in_gb_per_instance=memory_in_gb_per_instance,
-                start_instance_count=instance_count,
-                min_instance_count=min_instance_count,
-                max_instance_count=max_instance_count,
-                auto_scaling=auto_scaling,
-                auto_termination=auto_termination,
-                log_session_count="1",
-                include_system_logs=False,
-                log_all_simulators=False,
-                workspace=workspace_id,
-                debug=debug,
-            )
-
-        except BrainServerError as e:
-            raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-        except AuthenticationError as e:
-            raise_as_click_exception(e)
-
-        except Exception as e:
-            raise_client_side_click_exception(
-                output, test, "{}: {}".format(type(e), e.args)
-            )
-
-        try:
-            response = api(use_aad=True).start_assessment(
-                name, version=version, workspace=workspace_id, debug=debug
-            )
-
-            status_message = "{} version {} assessing started.".format(name, version)
-
-            if output == "json":
-                json_response = {
-                    "status": response["status"],
-                    "statusCode": response["statusCode"],
-                    "statusMessage": status_message,
-                }
-
-                click.echo(dumps(json_response, indent=4))
-
-            else:
-                click.echo(status_message)
-
-        except BrainServerError as e:
-            if e.exception["statusCode"] == 404:
-                raise_not_found_as_click_exception(
-                    debug,
-                    output,
-                    "Start-assessing brain version",
-                    "Brain '{}' version".format(name),
-                    "{}".format(version),
-                    test,
-                    e,
-                )
-            else:
-                raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-        except AuthenticationError as e:
-            raise_as_click_exception(e)
-
-        except Exception as e:
-            raise_client_side_click_exception(
-                output, test, "{}: {}".format(type(e), e.args)
-            )
-
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
-
-
-@click.command("stop-assessing", short_help="Stop assessing a brain version.")
-@click.option("--name", "-n", help="[Required] Name of the brain.")
-@click.option(
-    "--version", type=int, help="Version to stop assessing, defaults to latest."
-)
-@click.option(
-    "--workspace-id",
-    "-w",
-    help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
-)
-@click.option(
-    "--debug", default=False, is_flag=True, help="Verbose logging for request."
-)
-@click.option("--output", "-o", help="Set output, only json supported.")
-@click.option(
-    "--test",
-    default=False,
-    is_flag=True,
-    help="Enhanced response for testing.",
-    hidden=True,
-)
-@click.pass_context
-def stop_assessing(
-    ctx: click.Context,
-    name: str,
-    version: int,
-    workspace_id: str,
-    debug: bool,
-    output: str,
-    test: bool,
-):
-
-    version_checker = get_version_checker(ctx, interactive=not output)
-
-    if not name:
-        raise_as_click_exception("\nName of the brain is required")
-
-    if not version:
-        version = get_latest_brain_version(
-            name, "Stop-assessing brain version", debug, output, test
-        )
-
-    try:
-        response = api(use_aad=True).stop_assessment(
-            name, version=version, workspace=workspace_id, debug=debug
-        )
-
-        status_message = "{} version {} assessing stopped.".format(
-            name, response["version"]
-        )
-
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
-
-    except BrainServerError as e:
-        if e.exception["statusCode"] == 404:
-            raise_not_found_as_click_exception(
-                debug,
-                output,
-                "Stop-assessing brain version",
-                "Brain '{}' version".format(name),
-                "{}".format(version),
-                test,
-                e,
-            )
-        else:
-            raise_brain_server_error_as_click_exception(debug, output, test, e)
-
-    except AuthenticationError as e:
-        raise_as_click_exception(e)
-
-    except Exception as e:
-        raise_client_side_click_exception(
-            output, test, "{}: {}".format(type(e), e.args)
-        )
-
-    version_checker.check_cli_version(wait=True, print_up_to_date=False)
+def stop_assessing():
+    pass
 
 
 version.add_command(create_brain_version)
