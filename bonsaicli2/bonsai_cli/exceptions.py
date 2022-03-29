@@ -28,6 +28,7 @@ class BrainServerError(Exception):
     """
 
     def __init__(self, exception: Any):
+        super().__init__()
         self.exception = exception
 
     pass

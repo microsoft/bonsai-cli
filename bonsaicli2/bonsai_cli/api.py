@@ -1086,6 +1086,7 @@ class BonsaiAPI(object):
         self,
         name: str,
         max_instance_count: int,
+        spot_percent: int,
         cores_per_instance: float,
         memory_in_gb_per_instance: float,
         image_path: Optional[str] = None,
@@ -1122,6 +1123,7 @@ class BonsaiAPI(object):
             "modelFilePath": model_file_path,
             "modelBaseImageName": model_base_image_name,
             "maxInstanceCount": max_instance_count,
+            "spotPercent": spot_percent,
         }
         return self._put(url=url, data=data, debug=debug, output=output, event=event)
 
@@ -1493,6 +1495,7 @@ class BonsaiAPI(object):
         session_id: str,
         log_session_count: int,
         include_system_logs: bool,
+        log_all_simulators: bool,
         version: int = 1,
         workspace: Optional[str] = None,
         debug: bool = False,
@@ -1508,6 +1511,7 @@ class BonsaiAPI(object):
         data = {
             "sessionCount": log_session_count,
             "includeSystemLogs": include_system_logs,
+            "logAll": log_all_simulators,
         }
 
         url = urljoin(self._api_url, url_path)
