@@ -10,6 +10,7 @@ from json import dumps
 from bonsai_cli.exceptions import AuthenticationError, BrainServerError
 from bonsai_cli.utils import (
     api,
+    get_latest_brain_version,
     get_version_checker,
     raise_as_click_exception,
     raise_brain_server_error_as_click_exception,
@@ -18,7 +19,7 @@ from bonsai_cli.utils import (
 )
 
 
-@click.group(hidden=True)
+@click.group()
 def exportedbrain():
     """Exported brain operations."""
     pass
@@ -27,21 +28,16 @@ def exportedbrain():
 @click.command("create", short_help="Create an exported brain.")
 @click.pass_context
 @click.option("--name", "-n", help="[Required] Name of the exported brain.")
-@click.option("--display-name", "-dn", help="Display name of the exported brain.")
-@click.option("--description", "-des", help="Description for the exported brain.")
+@click.option("--display-name", help="Display name of the exported brain.")
+@click.option("--description", help="Description for the exported brain.")
 @click.option(
     "--processor-architecture",
-    "-pa",
-    help="Processor architecture for the exported brain. (Note: arm32v7 and arm64v8 processor architectures are only available for Linux exported brains.)",
+    help="Processor architecture for the exported brain.",
     type=click.Choice(["x64", "arm32v7", "arm64v8"]),
     default="x64",
 )
-@click.option(
-    "--brain-name", "-bn", help="[Required] Name of the brain to be exported."
-)
-@click.option(
-    "--brain-version", "-bv", help="[Required] Version of the brain to be exported"
-)
+@click.option("--brain-name", "-b", help="[Required] Name of the brain to be exported.")
+@click.option("--brain-version", help="Version of the brain to be exported")
 @click.option(
     "--workspace-id",
     "-w",
@@ -61,13 +57,14 @@ def exportedbrain():
 @click.option(
     "--os-type",
     "-os",
-    help="Operating system type for the exported brain container.  (Note: Windows exported brains are only available for the x64 processor architecture.)",
-    type=click.Choice(["linux", "windows"]),
+    help="Operating system type for the exported brain container.",
+    type=click.Choice(["linux"]),
     default="linux",
+    hidden=True,
 )
 @click.option(
     "--export-type",
-    type=click.Choice(["Predictor", "Neuralsim", "ExportedBrain"]),
+    type=click.Choice(["Predictor", "Neuralsim"]),
     default="Predictor",
     hidden=True,
 )
@@ -91,14 +88,13 @@ def create_exportedbrain(
     if not name:
         raise_as_click_exception("Name of the exported brain is required")
 
-    if not name:
+    if not brain_name:
         raise_as_click_exception("Name of the brain to be exported is required")
 
     if not brain_version:
-        raise_as_click_exception("Version of the brain to be exported is required")
-
-    if os_type == "windows" and processor_architecture != "x64":
-        raise_as_click_exception("Only x64 is supported for Windows exported brains")
+        brain_version = get_latest_brain_version(
+            brain_name, "Export Brain", debug, output, test
+        )
 
     try:
         response = api(use_aad=True).create_exported_brain(
@@ -290,8 +286,8 @@ def show_exportedbrain(
 
 @click.command("update", short_help="Update information about an exported brain.")
 @click.option("--name", "-n", help="[Required] Name of the exported brain.")
-@click.option("--display-name", "-dn", help="Display name for the exported brain.")
-@click.option("--description", "-des", help="Description for the exported brain.")
+@click.option("--display-name", help="Display name for the exported brain.")
+@click.option("--description", help="Description for the exported brain.")
 @click.option(
     "--workspace-id",
     "-w",

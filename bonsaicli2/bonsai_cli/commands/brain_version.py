@@ -918,7 +918,7 @@ def start_training(
             "\nInstance count works only with a simulator package, please provide the name of the simulator package you would like to use"
         )
 
-    if log_session_count != 1 and not simulator_package_name:
+    if int(log_session_count) != 1 and not simulator_package_name:
         raise_as_click_exception(
             "\nLog session count works only with a simulator package, please provide the name of the simulator package you would like to use"
         )
@@ -1165,6 +1165,13 @@ def stop_training(
     help="Please use this flag if this is for managed simulators.",
 )
 @click.option(
+    "--all",
+    default=False,
+    is_flag=True,
+    hidden=True,
+    help="Flag to log iterations for all managed simulators. This cannot be set at the same with --log-session-count.",
+)
+@click.option(
     "--session-id",
     "-d",
     type=str,
@@ -1175,7 +1182,7 @@ def stop_training(
     "-s",
     type=int,
     default=4,
-    help="Number of simulators to enable logging for, in the case of managed simulators. Default is 4.",
+    help="Number of simulators to enable iterations logging for, in the case of managed simulators. Default is 4. This cannot be set at the same with --all.",
 )
 @click.option(
     "--include-system-logs",
@@ -1209,6 +1216,7 @@ def start_logging(
     version: int,
     workspace_id: str,
     managed_simulator: bool,
+    all: bool,
     session_id: str,
     log_session_count: int,
     include_system_logs: bool,
@@ -1231,9 +1239,19 @@ def start_logging(
     if not managed_simulator and not session_id:
         raise_as_click_exception("\nFor an unmanaged simulator, session-id is requried")
 
-    if include_system_logs and not managed_simulator:
+    if not managed_simulator and include_system_logs:
         raise_as_click_exception(
             "\nIncluding system logs is currently only supported for managed simulators"
+        )
+
+    if not managed_simulator and all:
+        raise_as_click_exception(
+            "\nLogging all the simulators is currently only supported for managed simulators"
+        )
+
+    if all and log_session_count and log_session_count != 4:
+        raise_as_click_exception(
+            "\nYou can only set either --log-session-count or --all flag."
         )
 
     if not session_id:
@@ -1270,6 +1288,7 @@ def start_logging(
                 session_id=session_id,
                 log_session_count=log_session_count,
                 include_system_logs=include_system_logs,
+                log_all_simulators=all,
                 workspace=workspace_id,
                 debug=debug,
             )

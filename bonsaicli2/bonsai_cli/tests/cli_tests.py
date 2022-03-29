@@ -11,6 +11,8 @@ import os
 import subprocess
 import time
 import unittest
+import getpass
+import socket
 
 from bonsai_cli.commands.bonsai import cli
 
@@ -22,15 +24,25 @@ current_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 class TestCLI(unittest.TestCase):
     def setUp(self):
         # Uncomment and populate empty value when testing CLI commands against prod endpoints before pypi release
-        # os.environ["SIM_WORKSPACE"] = "" # Workspace ID
-        # os.environ["TENANT_ID"] = "" # Tenant ID
-        # os.environ["URL"] = "https://cp-api.bons.ai"
-        # os.environ["GATEWAY_URL"] = "https://api.bons.ai"
-        # os.environ["SIM_API_HOST"] = "https://api.bons.ai"
-        # os.environ[
-        #     "SIM_ACCESS_KEY"
-        # ] = "" # Prod sim access key
+        os.environ["SIM_WORKSPACE"] = "e293c73a-f6d5-4269-9b7d-3ebbf26906f3" # Workspace ID
+        os.environ["TENANT_ID"] = "72f988bf-86f1-41af-91ab-2d7cd011db47" # Tenant ID
+        os.environ["URL"] = "https://cp-api.bons.ai"
+        os.environ["GATEWAY_URL"] = "https://api.bons.ai"
+        os.environ["SIM_API_HOST"] = "https://api.bons.ai"
+        os.environ[
+            "SIM_ACCESS_KEY"
+        ] = "ZDY0ZGI1OWNhYTNkNGRkYThlOWY4NjEyMmE0ZTEzOTI6YjJhYTJmMTgtYmU4Ny00ODQ3LThhYzktZTY1ZDJjNGYzN2Nl" # Prod sim access key
 
+        # This is required to make workspace id unique
+        user_name = getpass.getuser()
+        host_name = socket.gethostname()
+        machine_name = host_name.split(".")[0]
+
+        # os.environ["SIM_WORKSPACE"] = (
+        #     "bdeadmin" + "-" + user_name + "-" + machine_name
+        # ).lower()  # Workspace ID
+
+        self.workspace_id = os.environ["SIM_WORKSPACE"]
         self.brain_name = "cli_brain_" + current_timestamp
         self.container_simulator_package_name = (
             "cli_container_simulator_package{}".format(current_timestamp)
@@ -93,7 +105,7 @@ class TestCLI(unittest.TestCase):
     def configure(self):
         configure = (
             "configure -w {} --tenant-id {} --url {} --gateway-url {} --test".format(
-                os.environ["SIM_WORKSPACE"],
+                self.workspace_id,
                 os.environ["TENANT_ID"],
                 os.environ["URL"],
                 os.environ["GATEWAY_URL"],
@@ -132,7 +144,7 @@ class TestCLI(unittest.TestCase):
                 f'"purpose": {{ '
                 f'"action": "{self.action_name}", '
                 f'"target": {{ '
-                f'"workspaceName": "{os.environ["SIM_WORKSPACE"]}", '
+                f'"workspaceName": "{self.workspace_id}", '
                 f'"brainName": "{self.brain_name}", '
                 f'"brainVersion": "{self.brain_version}", '
                 f'"conceptName": "{self.concept_name}" }} }} }}'
@@ -144,6 +156,8 @@ class TestCLI(unittest.TestCase):
                     "src/sdk3/samples/cartpole-py/cartpole.py",
                     "--sim-context",
                     sim_context,
+                    "--workspace",
+                    self.workspace_id,
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -498,10 +512,9 @@ class TestCLI(unittest.TestCase):
     def simulator_unmanaged_list(self):
         list_simulator_unmanaged = "simulator unmanaged list -o json"
 
-        # print("SLEEPING FOR 10 HOURS")
-        # time.sleep(36000)
-
         response = runner.invoke(cli, list_simulator_unmanaged).output
+
+        print(f"Output of simulator unmanaged list -o json is {response}")
 
         self.assertFalse(
             "Error" in response,
@@ -871,6 +884,30 @@ class TestCLI(unittest.TestCase):
         self.assertTrue(response["statusCode"] == 200)
 
         print("\n\n{} succeeded".format(delete_brain))
+
+    def tearDown(self):
+        print("\n\nTearing down all python processes except the test process")
+
+        child_processes = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
+        output, error = child_processes.communicate()
+
+        target_process = "python"
+
+        if output is not None:
+            for line in output.splitlines():
+                if target_process in str(line):
+                    pid = int(line.split(None, 1)[0])
+
+                    if pid != os.getpid():
+                        os.system("sudo kill %s" % (pid))
+
+        if error is not None:
+            for line in error.splitlines():
+                if target_process in str(line):
+                    pid = int(line.split(None, 1)[0])
+
+                    if pid != os.getpid():
+                        os.system("sudo kill %s" % (pid))
 
 
 if __name__ == "__main__":
