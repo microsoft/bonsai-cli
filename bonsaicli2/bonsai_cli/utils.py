@@ -150,7 +150,9 @@ class AsyncCliVersionChecker(CliVersionCheckerInterface):
         self._pool = Pool(1)
         self._result = self._pool.apply_async(self._query_version)
 
-    def check_cli_version(self, wait: bool, print_up_to_date: bool = True) -> None:
+    def check_cli_version(
+        self, wait: bool = False, print_up_to_date: bool = True
+    ) -> None:
         """
         Compares local cli version with the one on PyPi.
 

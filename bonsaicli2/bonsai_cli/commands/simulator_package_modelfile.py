@@ -48,6 +48,12 @@ def modelfile():
     help="Maximum Number of instances to perform training with the modelfile simulator package.",
 )
 @click.option(
+    "--spot-percent",
+    type=click.IntRange(0, 90),
+    default=0,
+    help="Percentage of maximum instance count of managed simulators that will use spot pricing. Note that the maximum allowed spot percent is 90%",
+)
+@click.option(
     "--cores-per-instance",
     "-r",
     type=float,
@@ -84,6 +90,7 @@ def create_modelfile_simulator_package(
     file: str,
     base_image: str,
     max_instance_count: int,
+    spot_percent: int,
     cores_per_instance: float,
     memory_in_gb_per_instance: float,
     display_name: str,
@@ -173,6 +180,7 @@ def create_modelfile_simulator_package(
             model_file_path=upload_model_file_response["modelFileStoragePath"],
             model_base_image_name=base_image,
             max_instance_count=max_instance_count,
+            spot_percent=spot_percent,
             cores_per_instance=cores_per_instance,
             memory_in_gb_per_instance=memory_in_gb_per_instance,
             display_name=display_name,
@@ -206,7 +214,7 @@ def create_modelfile_simulator_package(
                 debug, output, "Modelfile simulator package", name, test, e
             )
         else:
-            raise_as_click_exception(e)
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)

@@ -15,6 +15,7 @@ from bonsai_cli.utils import (
     raise_as_click_exception,
     raise_client_side_click_exception,
     raise_unique_constraint_violation_as_click_exception,
+    raise_brain_server_error_as_click_exception,
 )
 
 
@@ -56,6 +57,12 @@ def container():
     type=int,
     help="Maximum Number of instances to perform training with the container simulator package.",
 )
+@click.option(
+    "--spot-percent",
+    type=click.IntRange(0, 90),
+    default=0,
+    help="Percentage of maximum instance count of managed simulators that will use spot pricing. Note that the maximum allowed spot percent is 90%",
+)
 @click.option("--display-name", help="Display name of the container simulator package.")
 @click.option("--description", help="Description for the container simulator package.")
 @click.option(
@@ -80,6 +87,7 @@ def create_container_simulator_package(
     name: str,
     image_uri: str,
     max_instance_count: int,
+    spot_percent: int,
     cores_per_instance: float,
     memory_in_gb_per_instance: float,
     os_type: str,
@@ -123,6 +131,7 @@ def create_container_simulator_package(
             name=name,
             image_path=image_uri,
             max_instance_count=max_instance_count,
+            spot_percent=spot_percent,
             cores_per_instance=cores_per_instance,
             memory_in_gb_per_instance=memory_in_gb_per_instance,
             display_name=display_name,
@@ -156,7 +165,7 @@ def create_container_simulator_package(
                 debug, output, "Container simulator package", name, test, e
             )
         else:
-            raise_as_click_exception(e)
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)

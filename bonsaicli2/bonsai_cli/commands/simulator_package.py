@@ -50,9 +50,7 @@ This model file upload command is just for internal usage and hence hidden flag 
 )
 @click.option("--output", "-o", help="Set output, only json supported.")
 @click.pass_context
-def upload_model_file(
-    ctx: click.Context, modelfilepath: str, debug: bool, output: bool
-):
+def upload_model_file(ctx: click.Context, modelfilepath: str, debug: bool, output: str):
 
     version_checker = get_version_checker(ctx, interactive=not output)
 
