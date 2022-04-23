@@ -1097,6 +1097,13 @@ class BonsaiAPI(object):
         os_type: Optional[str] = None,
         package_type: Optional[str] = None,
         workspace: Optional[str] = None,
+        publisher_id: Optional[str] = None,
+        offer_id: Optional[str] = None,
+        plan_id: Optional[str] = None,
+        meter_id: Optional[str] = None,
+        part_number: Optional[str] = None,
+        managed_app_resourcegroup_name: Optional[str] = None,
+        managed_app_name: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
     ):
@@ -1124,7 +1131,15 @@ class BonsaiAPI(object):
             "modelBaseImageName": model_base_image_name,
             "maxInstanceCount": max_instance_count,
             "spotPercent": spot_percent,
+            "publisherId": publisher_id,
+            "offerId": offer_id,
+            "planId": plan_id,
+            "meterId": meter_id,
+            "partNumber": part_number,
+            "managedAppResourceGroupName": managed_app_resourcegroup_name,
+            "managedAppName": managed_app_name,
         }
+
         return self._put(url=url, data=data, debug=debug, output=output, event=event)
 
     def list_sim_package(
