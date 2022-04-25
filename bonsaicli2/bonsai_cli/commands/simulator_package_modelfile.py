@@ -1,14 +1,13 @@
 """
 This file contains the code for commands that target a bonsai model file simulator package in version 2 of the bonsai command line.
 """
-__author__ = "Karthik Sankara Subramanian"
+__author__ = "Anil Puvvadi, Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2021, Microsoft Corp."
 
 from typing import Any, Dict, List
 import click
 import os
 import time
-
 from json import dumps
 from tabulate import tabulate
 
@@ -43,6 +42,12 @@ def modelfile():
     help="[Required] The simulator base_image you would like to use. Run 'bonsai simulator package modelfile list-base-image' to get the list of accepted simulator base_images.",
 )
 @click.option(
+    "--os-type",
+    "-p",
+    help="[Required] OS type for the model file simulator package. Windows or Linux.",
+    type=click.Choice(["Windows", "Linux"], case_sensitive=False),
+)
+@click.option(
     "--max-instance-count",
     type=int,
     help="Maximum Number of instances to perform training with the modelfile simulator package.",
@@ -73,6 +78,16 @@ def modelfile():
     help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
 )
 @click.option(
+    "--managed-app-resourcegroup-name",
+    help="ManagedApp ResourceGroupName under which managed app is currently running for the offer chosen.",
+    hidden=True,
+)
+@click.option(
+    "--managed-app-name",
+    help="ManagedApp Name currently running under customer subscription for the offer chosen.",
+    hidden=True,
+)
+@click.option(
     "--debug", default=False, is_flag=True, help="Verbose logging for request."
 )
 @click.option("--output", "-o", help="Set output, only json supported.")
@@ -96,6 +111,9 @@ def create_modelfile_simulator_package(
     display_name: str,
     description: str,
     workspace_id: str,
+    managed_app_resourcegroup_name: str,
+    managed_app_name: str,
+    os_type: str,
     debug: bool,
     output: str,
     test: bool,
@@ -117,6 +135,10 @@ def create_modelfile_simulator_package(
         required_options_provided = False
         error_msg += "\nBase image details are required"
 
+    if not os_type:
+        required_options_provided = False
+        error_msg += "\nOS Type is required"
+
     if not required_options_provided:
         raise_as_click_exception(error_msg)
 
@@ -124,7 +146,6 @@ def create_modelfile_simulator_package(
         get_sim_base_image_response = api(use_aad=True).get_sim_base_image(
             base_image, workspace=workspace_id, debug=debug, output=output
         )
-
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
             raise_as_click_exception(
@@ -148,6 +169,23 @@ def create_modelfile_simulator_package(
         memory_in_gb_per_instance = get_sim_base_image_response[
             "memInGBPerInstanceRecommended"
         ]
+
+    publisher_id = ""
+    offer_id = ""
+    plan_id = ""
+    meter_id = ""
+    part_number = ""
+
+    if "publisherId" in get_sim_base_image_response:
+        publisher_id = get_sim_base_image_response["publisherId"]
+    if "offerId" in get_sim_base_image_response:
+        offer_id = get_sim_base_image_response["offerId"]
+    if "planId" in get_sim_base_image_response:
+        plan_id = get_sim_base_image_response["planId"]
+    if "meterId" in get_sim_base_image_response:
+        meter_id = get_sim_base_image_response["meterId"]
+    if "partNumber" in get_sim_base_image_response:
+        part_number = get_sim_base_image_response["partNumber"]
 
     try:
         tic = time.perf_counter()
@@ -185,9 +223,16 @@ def create_modelfile_simulator_package(
             memory_in_gb_per_instance=memory_in_gb_per_instance,
             display_name=display_name,
             description=description,
-            os_type="linux",
+            os_type=os_type,
             package_type="modelfile",
             workspace=workspace_id,
+            publisher_id=publisher_id,
+            offer_id=offer_id,
+            plan_id=plan_id,
+            meter_id=meter_id,
+            part_number=part_number,
+            managed_app_resourcegroup_name=managed_app_resourcegroup_name,
+            managed_app_name=managed_app_name,
             debug=debug,
             output=output,
         )
@@ -267,13 +312,35 @@ def list_base_image_modelfile_simulator_package(
 
         rows: List[Any] = []
         dict_rows: List[Dict[str, Any]] = []
+
         for item in response["value"]:
             try:
+                os_type = "NA"
+                publisher_id = "NA"
+                offer_id = "NA"
+                plan_id = "NA"
+                meter_id = "NA"
+                part_number = "NA"
+
                 base_image = item["imageIdentifier"]
                 cores_per_instance = item["coresPerInstanceRecommended"]
                 memory_in_gb_per_instance = item["memInGBPerInstanceRecommended"]
                 start_instance_count = item["startInstanceCount"]
                 max_instance_count = item["maxInstanceCount"]
+
+                if "osType" in item:
+                    os_type = item["osType"]
+                if "publisherId" in item:
+                    publisher_id = item["publisherId"]
+                if "offerId" in item:
+                    offer_id = item["offerId"]
+                if "planId" in item:
+                    plan_id = item["planId"]
+                if "meterId" in item:
+                    meter_id = item["meterId"]
+                if "partNumber" in item:
+                    part_number = item["partNumber"]
+
                 rows.append(
                     [
                         base_image,
@@ -281,8 +348,15 @@ def list_base_image_modelfile_simulator_package(
                         memory_in_gb_per_instance,
                         start_instance_count,
                         max_instance_count,
+                        os_type,
+                        publisher_id,
+                        offer_id,
+                        plan_id,
+                        meter_id,
+                        part_number,
                     ]
                 )
+
                 dict_rows.append(
                     {
                         "baseImage": base_image,
@@ -290,6 +364,12 @@ def list_base_image_modelfile_simulator_package(
                         "defaultMemoryInGBPerInstance": memory_in_gb_per_instance,
                         "defaultStartInstanceCount": start_instance_count,
                         "defaultMaxInstanceCount": max_instance_count,
+                        "osType": os_type,
+                        "publisherId": publisher_id,
+                        "offerId": offer_id,
+                        "planId": plan_id,
+                        "meterId": meter_id,
+                        "partNumber": part_number,
                     }
                 )
             except KeyError:
@@ -318,6 +398,12 @@ def list_base_image_modelfile_simulator_package(
                     "Default Memory in GB Per Instance",
                     "Default Start Instance Count",
                     "Default Max Instance Count",
+                    "OS Type",
+                    "Publisher Id",
+                    "Offer Id",
+                    "Plan Id",
+                    "Meter Id",
+                    "Part Number",
                 ],
                 tablefmt="orgtbl",
             )

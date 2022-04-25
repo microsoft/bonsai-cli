@@ -376,7 +376,7 @@ class TestCLI(unittest.TestCase):
             "--name {} "
             "--cores-per-instance 1 "
             "--memory-in-gb-per-instance 1 "
-            "--image-uri mcr.microsoft.com/bonsai/cartpoledemo:5 "
+            "--image-uri mcr.microsoft.com/bonsai/cartpoledemo:6 "
             "--os-type Linux "
             "--display-name {} "
             "--description {} "
@@ -409,6 +409,7 @@ class TestCLI(unittest.TestCase):
             "simulator package modelfile create "
             "-n {} "
             "-f {} "
+            "--os-type Linux "
             "--base-image mathworks-simulink-2020a "
             "-o json".format(self.modelfile_simulator_package_name, model_file)
         )
@@ -886,6 +887,13 @@ class TestCLI(unittest.TestCase):
         print("\n\n{} succeeded".format(delete_brain))
 
     def tearDown(self):
+        print(
+            "\n\n{} Listing all system processes before tear down".format(
+                datetime.now()
+            )
+        )
+        os.system("ps -A")
+
         print("\n\nTearing down all python processes except the test process")
 
         child_processes = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
@@ -908,6 +916,11 @@ class TestCLI(unittest.TestCase):
 
                     if pid != os.getpid():
                         os.system("sudo kill %s" % (pid))
+
+        print(
+            "\n\n{} Listing all system processes after tear down".format(datetime.now())
+        )
+        os.system("ps -A")
 
 
 if __name__ == "__main__":
