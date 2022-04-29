@@ -42,33 +42,96 @@ class TestCLI(unittest.TestCase):
             "bdeadmin" + "-" + user_name + "-" + machine_name
         ).lower()  # Workspace ID
 
+        #
+        # Workspace ID for the CLI test
+        #
         self.workspace_id = os.environ["SIM_WORKSPACE"]
+
+        #
+        # Brain Name for the CLI test
+        #
         self.brain_name = "cli_brain_" + current_timestamp
+
+        #
+        # Brain Version for the CLI test
+        #
+        self.brain_version = 1
+
+        #
+        # Brain Version Concept Name for the CLI test
+        #
+        self.concept_name = "BalancePole"
+
+        #
+        # Brain Version Action Name for the CLI test
+        #
+        self.action_name = "Train"
+
+        #
+        # Assessment Name for the CLI test
+        #
+        self.assessment_name = "cli_assessment_{}".format(current_timestamp)
+
+        #
+        # Exported Brain Name for the CLI test
+        #
+        self.exportedbrain_name = "cli_exported_brain_" + current_timestamp
+
+        #
+        # Container Simulator Package Name for the CLI test
+        #
         self.container_simulator_package_name = (
             "cli_container_simulator_package{}".format(current_timestamp)
         )
+
+        #
+        # Modelfile Simulator Package Name for the CLI test
+        #
         self.modelfile_simulator_package_name = (
             "cli_modelfile_simulator_package{}".format(current_timestamp)
         )
-        self.assessment_name = "cli_assessment_{}".format(current_timestamp)
+
+        #
+        # Unmanaged Simulator Name for the CLI test
+        #
         self.unmanaged_simulator_name = None
+
+        #
+        # Unmanaged Simulator Session ID for the CLI test
+        #
         self.unmanaged_simulator_session_id = None
-        self.brain_version = 1
-        self.concept_name = "BalancePole"
-        self.action_name = "Train"
 
     def test_cli(self):
+        #
+        # Test CLI Configure
+        #
         self.configure()
-        self.brain_create()
+
+        #
+        # Start unmanaged sims
+        #
         self.start_unmanaged_sims()
+
+        #
+        # Test brain commands
+        #
+        self.brain_create()
         self.brain_show()
         self.brain_update()
         self.brain_list()
+
+        #
+        # Test brain version commands
+        #
         self.brain_version_show()
         self.brain_version_update()
         self.brain_version_list()
         self.brain_version_update_inkling()
         self.brain_version_get_inkling()
+
+        #
+        # Test unmanaged sim commands
+        #
         self.simulator_unmanaged_list()
         self.simulator_unmanaged_show()
         self.simulator_unmanaged_connect()
@@ -77,6 +140,10 @@ class TestCLI(unittest.TestCase):
         # TODO: IMPORTANT: Needs to be enabled when running the cli tests before pypi release
         # self.brain_version_start_logging()
         # self.brain_version_stop_logging()
+
+        #
+        # Test simulator package commands
+        #
         self.simulator_package_container_create()
 
         # TODO: Since base image details are not present in database in BDE, modelfile create needs to be disabled till the command owner fixes this
@@ -87,7 +154,15 @@ class TestCLI(unittest.TestCase):
         self.simulator_package_show()
         self.simulator_package_update()
         self.simulator_package_list()
+
+        #
+        # Test start training command
+        #
         self.brain_version_start_training()
+
+        #
+        # Test assessment commands
+        #
         self.brain_version_assessment_start()
         self.brain_version_assessment_show()
         self.brain_version_assessment_get_configuration()
@@ -95,11 +170,36 @@ class TestCLI(unittest.TestCase):
         self.brain_version_assessment_list()
         self.brain_version_assessment_stop()
         self.brain_version_assessment_delete()
+
+        #
+        # Test export commands
+        #
+        self.exportedbrain_create()
+        self.exportedbrain_show()
+        self.exportedbrain_update()
+        self.exportedbrain_list()
+        self.exportedbrain_delete()
+
+        #
+        # Test stop and reset training commands
+        #
         self.brain_version_stop_training()
         self.brain_version_reset_training()
+
+        #
+        # Test brain version copy and delete commands
+        #
         self.brain_version_copy()
         self.brain_version_delete()
+
+        #
+        # Test simulator package remove command
+        #
         self.simulator_package_remove()
+
+        #
+        # Test brain delete command
+        #
         self.brain_delete()
 
     def configure(self):
@@ -812,6 +912,94 @@ class TestCLI(unittest.TestCase):
 
         print("\n\n{} succeeded".format(delete_brain_version_assessment))
 
+    def exportedbrain_create(self):
+        create_exportedbrain = "exportedbrain create -n {} -b {} -o json".format(
+            self.exportedbrain_name, self.brain_name
+        )
+
+        response = runner.invoke(cli, create_exportedbrain).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(create_exportedbrain, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(create_exportedbrain))
+
+    def exportedbrain_show(self):
+        show_exportedbrain = "exportedbrain show -n {} -o json".format(
+            self.exportedbrain_name
+        )
+
+        response = runner.invoke(cli, show_exportedbrain).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(show_exportedbrain, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(show_exportedbrain))
+
+    def exportedbrain_list(self):
+        list_exportedbrain = "exportedbrain list -o json"
+
+        response = runner.invoke(cli, list_exportedbrain).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(list_exportedbrain, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(list_exportedbrain))
+
+    def exportedbrain_update(self):
+        update_exportedbrain = "exportedbrain update -n {} --display-name exported_brain_display_name --description exported_brain_description -o json".format(
+            self.exportedbrain_name
+        )
+
+        response = runner.invoke(cli, update_exportedbrain).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(update_exportedbrain, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(update_exportedbrain))
+
+    def exportedbrain_delete(self):
+        delete_exportedbrain = "exportedbrain delete -n {} --yes -o json".format(
+            self.exportedbrain_name
+        )
+
+        response = runner.invoke(cli, delete_exportedbrain).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(delete_exportedbrain, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(delete_exportedbrain))
+
     def brain_version_reset_training(self):
         reset_training_brain_version = (
             "brain version reset-training -n {} --all -y -o json".format(
@@ -887,13 +1075,6 @@ class TestCLI(unittest.TestCase):
         print("\n\n{} succeeded".format(delete_brain))
 
     def tearDown(self):
-        print(
-            "\n\n{} Listing all system processes before tear down".format(
-                datetime.now()
-            )
-        )
-        os.system("ps -A")
-
         print("\n\nTearing down all python processes except the test process")
 
         child_processes = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
@@ -916,11 +1097,6 @@ class TestCLI(unittest.TestCase):
 
                     if pid != os.getpid():
                         os.system("sudo kill %s" % (pid))
-
-        print(
-            "\n\n{} Listing all system processes after tear down".format(datetime.now())
-        )
-        os.system("ps -A")
 
 
 if __name__ == "__main__":
