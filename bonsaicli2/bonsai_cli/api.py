@@ -1759,7 +1759,7 @@ class BonsaiAPI(object):
         )
 
         data = {"displayName": display_name, "description": description}
-        return self._put(url=url, data=data, debug=debug, output=output, event=event)
+        return self._patch(url=url, data=data, debug=debug, output=output, event=event)
 
     def delete_exported_brain(
         self,

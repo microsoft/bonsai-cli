@@ -4,6 +4,8 @@ This file contains the code for commands that target a bonsai exported brain in 
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
+
+from typing import Any, Dict, List
 import click
 from json import dumps
 
@@ -16,6 +18,8 @@ from bonsai_cli.utils import (
     raise_brain_server_error_as_click_exception,
     raise_unique_constraint_violation_as_click_exception,
     raise_not_found_as_click_exception,
+    raise_client_side_click_exception,
+    raise_204_click_exception,
 )
 
 
@@ -107,46 +111,43 @@ def create_exportedbrain(
             brain_version=brain_version,
             workspace=workspace_id,
             debug=debug,
+            output=output,
             export_type=export_type,
         )
+
+        status_message = "{} created.".format(response["name"])
+
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
     except BrainServerError as e:
         if "Unique index constraint violation" in str(e):
             raise_unique_constraint_violation_as_click_exception(
-                debug, output, "Exported brain", name, test, e
+                debug, output, "Brain", name, test, e
             )
         else:
-            raise_as_click_exception(e)
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if output == "json":
-        json_response = {
-            "name": response["name"],
-            "displayName": response["displayName"],
-            "description": response["description"],
-            "processorArchitecture": response["processorArchitecture"],
-            "osType": response["osType"],
-            "acrPath": response["acrPath"],
-            "createdOn": response["createdTimeStamp"],
-            "modifiedOn": response["modifiedTimeStamp"],
-            "status": response["operationStatus"],
-            "statusMessage": response["operationStatusMessage"],
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo("Name: {}".format(response["name"]))
-        click.echo("Display Name: {}".format(response["displayName"]))
-        click.echo("Description: {}".format(response["description"]))
-        click.echo("Acr Path: {}".format(response["acrPath"]))
-        click.echo("Status: {}".format(response["operationStatus"]))
-        click.echo("Created On: {}".format(response["createdTimeStamp"]))
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -176,8 +177,34 @@ def list_exportedbrain(
 
     try:
         response = api(use_aad=True).list_exported_brain(
-            workspace=workspace_id, debug=debug
+            workspace=workspace_id, debug=debug, output=output
         )
+
+        if len(response["value"]) == 0:
+            click.echo("No exported brains exist for the current user")
+            ctx.exit()
+
+        if output == "json":
+            dict_rows: List[Dict[str, Any]] = []
+            for exportedbrain in response["value"]:
+                dict_rows.append(exportedbrain["name"])
+
+            json_response = {
+                "value": dict_rows,
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": "",
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            for exportedbrain in response["value"]:
+                click.echo(exportedbrain["name"])
 
     except BrainServerError as e:
         raise_brain_server_error_as_click_exception(debug, output, test, e)
@@ -185,25 +212,16 @@ def list_exportedbrain(
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if len(response["value"]) == 0:
-        click.echo("No exported brains exist for the current user")
-        ctx.exit()
-
-    if output == "json":
-        if test:
-            response["elapsed"] = str(response["elapsed"])
-            response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(response, indent=4))
-
-    else:
-        for brain in response["value"]:
-            click.echo(brain["name"])
+    except Exception as e:
+        if e.args[0] != 0:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
 
-@click.command("show", short_help="Show information about an exported_brain.")
+@click.command("show", short_help="Show information about an exported brain.")
 @click.option("--name", "-n", help="[Required] Name of the exported brain.")
 @click.option(
     "--workspace-id",
@@ -237,49 +255,59 @@ def show_exportedbrain(
 
     try:
         response = api(use_aad=True).get_exported_brain(
-            name, workspace=workspace_id, debug=debug
+            name,
+            workspace=workspace_id,
+            debug=debug,
+            output=output,
         )
 
-    except BrainServerError as e:
-        if "not found" in str(e):
-            raise_not_found_as_click_exception(
-                debug, output, "show", "exported brain", name, test, e
-            )
+        if output == "json":
+            json_response = {
+                "name": response["name"],
+                "displayName": response["displayName"],
+                "description": response["description"],
+                "processorArchitecture": response["processorArchitecture"],
+                "acrPath": response["acrPath"],
+                "createdOn": response["createdTimeStamp"],
+                "modifiedOn": response["modifiedTimeStamp"],
+                "status": response["operationStatus"],
+                "statusCode": response["statusCode"],
+                "statusMessage": response["operationStatusMessage"],
+            }
 
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo("Name: {}".format(response["name"]))
+            click.echo("Display Name: {}".format(response["displayName"]))
+            click.echo("Description: {}".format(response["description"]))
+            click.echo(
+                "Processor Architecture: {}".format(response["processorArchitecture"])
+            )
+            click.echo("Acr Path: {}".format(response["acrPath"]))
+            click.echo("Status: {}".format(response["operationStatus"]))
+            click.echo("Created On: {}".format(response["createdTimeStamp"]))
+            click.echo("Modified On: {}".format(response["modifiedTimeStamp"]))
+
+    except BrainServerError as e:
+        if e.exception["statusCode"] == 404:
+            raise_not_found_as_click_exception(
+                debug, output, "Show exported brain", "Exported brain", name, test, e
+            )
         else:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    if output == "json":
-        json_response = {
-            "name": response["name"],
-            "displayName": response["displayName"],
-            "description": response["description"],
-            "processorArchitecture": response["processorArchitecture"],
-            "osType": response["osType"],
-            "acrPath": response["acrPath"],
-            "createdOn": response["createdTimeStamp"],
-            "modifiedOn": response["modifiedTimeStamp"],
-            "status": response["operationStatus"],
-            "statusMessage": response["operationStatusMessage"],
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo("Name: {}".format(response["name"]))
-        click.echo("Display Name: {}".format(response["displayName"]))
-        click.echo("Description: {}".format(response["description"]))
-        click.echo("Acr Path: {}".format(response["acrPath"]))
-        click.echo("Status: {}".format(response["operationStatus"]))
-        click.echo("Created On: {}".format(response["createdTimeStamp"]))
-        click.echo("Modified On: {}".format(response["modifiedTimeStamp"]))
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -327,37 +355,42 @@ def update_exportedbrain(
             description=description,
             workspace=workspace_id,
             debug=debug,
+            output=output,
         )
 
-    except BrainServerError as e:
-        if "not found" in str(e):
-            raise_not_found_as_click_exception(
-                debug, output, "update", "exported brain", name, test, e
-            )
+        status_message = "{} updated.".format(response["name"])
 
+        if output == "json":
+            json_response = {
+                "status": response["status"],
+                "statusCode": response["statusCode"],
+                "statusMessage": status_message,
+            }
+
+            if test:
+                json_response["elapsed"] = str(response["elapsed"])
+                json_response["timeTaken"] = str(response["timeTaken"])
+
+            click.echo(dumps(json_response, indent=4))
+
+        else:
+            click.echo(status_message)
+
+    except BrainServerError as e:
+        if e.exception["statusCode"] == 404:
+            raise_not_found_as_click_exception(
+                debug, output, "Update exported brain", "Exported brain", name, test, e
+            )
         else:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     except AuthenticationError as e:
         raise_as_click_exception(e)
 
-    status_message = "{} updated.".format(response["name"])
-
-    if output == "json":
-        json_response = {
-            "status": response["status"],
-            "statusCode": response["statusCode"],
-            "statusMessage": status_message,
-        }
-
-        if test:
-            json_response["elapsed"] = str(response["elapsed"])
-            json_response["timeTaken"] = str(response["timeTaken"])
-
-        click.echo(dumps(json_response, indent=4))
-
-    else:
-        click.echo(status_message)
+    except Exception as e:
+        raise_client_side_click_exception(
+            output, test, "{}: {}".format(type(e), e.args)
+        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
@@ -405,7 +438,7 @@ def delete_exportedbrain(
 
     if not yes:
         click.echo(
-            "Are you sure you want to delete EXPORTED brain {} (y/n?).".format(name)
+            "Are you sure you want to delete exported brain {} (y/n?).".format(name)
         )
         choice = input().lower()
 
@@ -422,32 +455,45 @@ def delete_exportedbrain(
     if is_delete:
         try:
             response = api(use_aad=True).delete_exported_brain(
-                name, workspace=workspace_id, debug=debug
+                name,
+                workspace=workspace_id,
+                debug=debug,
+                output=output,
             )
+
+            if response["statusCode"] == 204:
+                raise_204_click_exception(
+                    debug,
+                    output,
+                    test,
+                    204,
+                    "Exported brain '{}' not found".format(name),
+                    response,
+                )
+
+            status_message = "{} deleted.".format(name)
+
+            if output == "json":
+                json_response = {
+                    "status": response["status"],
+                    "statusCode": response["statusCode"],
+                    "statusMessage": status_message,
+                }
+
+                if test:
+                    json_response["elapsed"] = str(response["elapsed"])
+                    json_response["timeTaken"] = str(response["timeTaken"])
+
+                click.echo(dumps(json_response, indent=4))
+
+            else:
+                click.echo(status_message)
 
         except BrainServerError as e:
             raise_brain_server_error_as_click_exception(debug, output, test, e)
 
         except AuthenticationError as e:
             raise_as_click_exception(e)
-
-        status_message = "{} deleted.".format(name)
-
-        if output == "json":
-            json_response = {
-                "status": response["status"],
-                "statusCode": response["statusCode"],
-                "statusMessage": status_message,
-            }
-
-            if test:
-                json_response["elapsed"] = str(response["elapsed"])
-                json_response["timeTaken"] = str(response["timeTaken"])
-
-            click.echo(dumps(json_response, indent=4))
-
-        else:
-            click.echo(status_message)
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 
