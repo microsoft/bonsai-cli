@@ -13,6 +13,7 @@ import time
 import unittest
 import getpass
 import socket
+from typing import Any, List
 
 from bonsai_cli.commands.bonsai import cli
 
@@ -21,9 +22,15 @@ runner = CliRunner()
 current_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
 
+def test_print(*args: Any, **kwargs: Any):
+    kwargs["flush"] = True
+    print(*args, **kwargs)
+
+
 class TestCLI(unittest.TestCase):
     def setUp(self):
         # Uncomment and populate empty value when testing CLI commands against prod endpoints before pypi release
+
         # os.environ["SIM_WORKSPACE"] = "" # Workspace ID
         # os.environ["TENANT_ID"] = "" # Tenant ID
         # os.environ["URL"] = "https://cp-api.bons.ai"
@@ -78,11 +85,21 @@ class TestCLI(unittest.TestCase):
         self.exportedbrain_name = "cli_exported_brain_" + current_timestamp
 
         #
+        # Cloud deployment name
+        #
+        self.clouddeployment_name = "cli-deployment-" + current_timestamp
+
+        #
         # Container Simulator Package Name for the CLI test
         #
         self.container_simulator_package_name = (
             "cli_container_simulator_package{}".format(current_timestamp)
         )
+
+        #
+        # Dataset Name for CLI test
+        #
+        self.aml_dataset_name = "cli_aml_dataset{}".format(current_timestamp)
 
         #
         # Modelfile Simulator Package Name for the CLI test
@@ -102,6 +119,9 @@ class TestCLI(unittest.TestCase):
         self.unmanaged_simulator_session_id = None
 
     def test_cli(self):
+
+        self.unmanaged_simulators: List[Any] = []
+
         #
         # Test CLI Configure
         #
@@ -156,6 +176,14 @@ class TestCLI(unittest.TestCase):
         self.simulator_package_list()
 
         #
+        # Test dataset commands
+        #
+        self.dataset_aml_create()
+        self.dataset_show()
+        self.dataset_list()
+        self.dataset_delete()
+
+        #
         # Test start training command
         #
         self.brain_version_start_training()
@@ -172,18 +200,31 @@ class TestCLI(unittest.TestCase):
         self.brain_version_assessment_delete()
 
         #
-        # Test export commands
+        # Test export commands - except delete (needed for deployment)
         #
         self.exportedbrain_create()
         self.exportedbrain_show()
         self.exportedbrain_update()
         self.exportedbrain_list()
-        self.exportedbrain_delete()
 
         #
         # Test stop and reset training commands
         #
         self.brain_version_stop_training()
+
+        #
+        # test the deployment
+        #
+        self.deployment_webapp_create()
+        self.deployment_webapp_show()
+        self.deployment_webapp_list()
+        self.deployment_webapp_delete()
+
+        #
+        # now delete the exported brain
+        #
+        self.exportedbrain_delete()
+
         self.brain_version_reset_training()
 
         #
@@ -219,7 +260,19 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(configure, response),
         )
 
-        print("\n\n{} succeeded".format(configure))
+        test_print("\n\n{} succeeded".format(configure))
+
+    def parse_response(self, response: str):
+        """
+        The response from runner.invoke includes the output from check_cli_version.
+        Strip this so-not-JSON off of the end, and parse what remains!
+        """
+        cli_version_tail = response.find("You are using bonsai-cli version")
+
+        if cli_version_tail < 0:
+            return json.loads(response)
+
+        return json.loads(response[:cli_version_tail])
 
     def brain_create(self):
         create_brain = "brain create -n {} -o json".format(self.brain_name)
@@ -231,13 +284,16 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(create_brain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(create_brain))
+        test_print("\n\n{} succeeded".format(create_brain))
 
     def start_unmanaged_sims(self):
+
+        test_print("\n\nStarting unmanaged simulators")
+
         for x in range(16):
             sim_context = (
                 f'{{"deploymentMode": "Testing", '
@@ -263,7 +319,9 @@ class TestCLI(unittest.TestCase):
                 stderr=subprocess.PIPE,
             )
 
-            print(f"Starting local sim {x+1} with {command.args}")
+            self.unmanaged_simulators.append(command)
+
+            test_print(f"Started local sim {x+1} with {command.args}")
 
     def brain_show(self):
         show_brain = "brain show -n {} -o json".format(self.brain_name)
@@ -275,11 +333,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(show_brain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(show_brain))
+        test_print("\n\n{} succeeded".format(show_brain))
 
     def brain_update(self):
         update_brain = "brain update -n {} --description update -o json".format(
@@ -293,11 +351,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(update_brain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(update_brain))
+        test_print("\n\n{} succeeded".format(update_brain))
 
     def brain_list(self):
         list_brain = "brain list -o json".format(self.brain_name)
@@ -309,11 +367,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(list_brain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(list_brain))
+        test_print("\n\n{} succeeded".format(list_brain))
 
     def brain_version_copy(self):
         copy_brain_version = "brain version copy -n {} -o json".format(self.brain_name)
@@ -325,11 +383,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(copy_brain_version, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(copy_brain_version))
+        test_print("\n\n{} succeeded".format(copy_brain_version))
 
     def brain_version_show(self):
         show_brain_version = "brain version show -n {} -o json".format(self.brain_name)
@@ -341,11 +399,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(show_brain_version, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(show_brain_version))
+        test_print("\n\n{} succeeded".format(show_brain_version))
 
     def brain_version_update(self):
         update_brain_version = (
@@ -361,11 +419,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(update_brain_version, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(update_brain_version))
+        test_print("\n\n{} succeeded".format(update_brain_version))
 
     def brain_version_list(self):
         list_brain_version = "brain version list -n {} -o json".format(self.brain_name)
@@ -377,11 +435,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(list_brain_version, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(list_brain_version))
+        test_print("\n\n{} succeeded".format(list_brain_version))
 
     def brain_version_update_inkling(self):
         inkling_file = "src/sdk3/samples/cartpole-py/cartpole.ink"
@@ -400,11 +458,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(update_inkling_brain_version))
+        test_print("\n\n{} succeeded".format(update_inkling_brain_version))
 
     def brain_version_get_inkling(self):
         get_inkling_brain_version = "brain version get-inkling -n {} -o json".format(
@@ -420,11 +478,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(get_inkling_brain_version))
+        test_print("\n\n{} succeeded".format(get_inkling_brain_version))
 
     def brain_version_start_logging(self):
         start_logging_brain_version = (
@@ -442,11 +500,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(start_logging_brain_version))
+        test_print("\n\n{} succeeded".format(start_logging_brain_version))
 
     def brain_version_stop_logging(self):
         stop_logging_brain_version = (
@@ -464,11 +522,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(stop_logging_brain_version))
+        test_print("\n\n{} succeeded".format(stop_logging_brain_version))
 
     def simulator_package_container_create(self):
         create_simulator_package_container = (
@@ -497,11 +555,91 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 201)
 
-        print("\n\n{} succeeded".format(create_simulator_package_container))
+        test_print("\n\n{} succeeded".format(create_simulator_package_container))
+
+    def dataset_aml_create(self):
+        create_aml_dataset = (
+            "dataset aml create "
+            "--name {} "
+            "--display-name TabularMoveToCenterExpert19K "
+            "--data_source_type DeployedBrain "
+            "--subscription_id f4a777ae-540c-4214-ac89-6806513322a7 "
+            "--resource_group bonsai-dev-rg "
+            "--aml_workspace bonsai-dev-ml "
+            "--aml_dataset_name TabularMoveToCenterExpert19K "
+            "--aml_datastore_name moab "
+            "--aml_version 4 "
+            "-o json".format(
+                self.aml_dataset_name,
+            )
+        )
+
+        response = runner.invoke(cli, create_aml_dataset).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(create_aml_dataset, response),
+        )
+
+        response = self.parse_response(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        test_print("\n\n{} succeeded".format(create_aml_dataset))
+
+    def dataset_list(self):
+        list_dataset = "dataset list -o json"
+
+        response = runner.invoke(cli, list_dataset).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(list_dataset, response),
+        )
+
+        response = self.parse_response(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        test_print("\n\n{} succeeded".format(list_dataset))
+
+    def dataset_show(self):
+        show_dataset = "dataset show -n {} -o json".format(self.aml_dataset_name)
+
+        response = runner.invoke(cli, show_dataset).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(show_dataset, response),
+        )
+
+        response = self.parse_response(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        test_print("\n\n{} succeeded".format(show_dataset))
+
+    def dataset_delete(self):
+        delete_dataset = "dataset delete -n {} --yes -o json".format(
+            self.aml_dataset_name
+        )
+
+        response = runner.invoke(cli, delete_dataset).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(delete_dataset, response),
+        )
+
+        response = self.parse_response(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        test_print("\n\n{} succeeded".format(delete_dataset))
 
     def simulator_package_modelfile_create(self):
         model_file = "src/Services/EndToEndTestsV2/EndToEndTestsV2/Configuration/InputFiles/mwcartpole_simmodel.zip"
@@ -528,11 +666,11 @@ class TestCLI(unittest.TestCase):
 
         response = response[start_index : end_index + 1]
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 201)
 
-        print("\n\n{} succeeded".format(create_simulator_package_modelfile))
+        test_print("\n\n{} succeeded".format(create_simulator_package_modelfile))
 
     def simulator_package_modelfile_base_image_list(self):
         list_simulator_package_base_image = (
@@ -550,11 +688,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(list_simulator_package_base_image))
+        test_print("\n\n{} succeeded".format(list_simulator_package_base_image))
 
     def simulator_package_show(self):
         show_simulator_package = "simulator package show -n {} -o json".format(
@@ -568,11 +706,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(show_simulator_package, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(show_simulator_package))
+        test_print("\n\n{} succeeded".format(show_simulator_package))
 
     def simulator_package_update(self):
         update_simulator_package = (
@@ -588,11 +726,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(update_simulator_package, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(update_simulator_package))
+        test_print("\n\n{} succeeded".format(update_simulator_package))
 
     def simulator_package_list(self):
         list_simulator_package = "simulator package list -o json"
@@ -604,32 +742,32 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(list_simulator_package, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(list_simulator_package))
+        test_print("\n\n{} succeeded".format(list_simulator_package))
 
     def simulator_unmanaged_list(self):
         list_simulator_unmanaged = "simulator unmanaged list -o json"
 
         response = runner.invoke(cli, list_simulator_unmanaged).output
 
-        print(f"Output of simulator unmanaged list -o json is {response}")
+        test_print(f"Output of simulator unmanaged list -o json is {response}")
 
         self.assertFalse(
             "Error" in response,
             msg="{} failed with response {}".format(list_simulator_unmanaged, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
         self.unmanaged_simulator_session_id = response["value"][0]["sessionId"]
         self.unmanaged_simulator_name = response["value"][0]["name"]
 
-        print("\n\n{} succeeded".format(list_simulator_unmanaged))
+        test_print("\n\n{} succeeded".format(list_simulator_unmanaged))
 
     def simulator_unmanaged_show(self):
         show_simulator_unmanaged = "simulator unmanaged show -d {} -o json".format(
@@ -643,11 +781,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(show_simulator_unmanaged, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(show_simulator_unmanaged))
+        test_print("\n\n{} succeeded".format(show_simulator_unmanaged))
 
     def simulator_unmanaged_connect(self):
         connect_simulator_unmanaged = "simulator unmanaged connect -b {} -a Train -c BalancePole -d {} -o json".format(
@@ -663,11 +801,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(connect_simulator_unmanaged))
+        test_print("\n\n{} succeeded".format(connect_simulator_unmanaged))
 
     def brain_version_start_training(self):
         if "BONSAI_IS_BDE" in os.environ:
@@ -697,19 +835,19 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(start_training_brain_version))
-        print(
+        test_print("\n\n{} succeeded".format(start_training_brain_version))
+        test_print(
             "\n\nWaiting for 10 mins for training to progress to test assessment start at {}".format(
                 datetime.now()
             )
         )
-        time.sleep(
-            600
-        )  # wait for 10 minutes for training to generate checkpoints so that assessment can be started
+
+        # wait for 10 minutes for training to generate checkpoints so that assessment can be started
+        time.sleep(600)
 
     def brain_version_assessment_start(self):
         assessment_config_file = (
@@ -756,11 +894,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(start_brain_version_assessment))
+        test_print("\n\n{} succeeded".format(start_brain_version_assessment))
 
     def brain_version_assessment_show(self):
         show_brain_version_assessment = (
@@ -778,11 +916,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(show_brain_version_assessment))
+        test_print("\n\n{} succeeded".format(show_brain_version_assessment))
 
     def brain_version_assessment_get_configuration(self):
         get_configuration_brain_version_assessment = (
@@ -800,11 +938,13 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(get_configuration_brain_version_assessment))
+        test_print(
+            "\n\n{} succeeded".format(get_configuration_brain_version_assessment),
+        )
 
     def brain_version_assessment_update(self):
         update_brain_version_assessment = "brain version assessment update -n {} -b {} -des testdescription -o json".format(
@@ -820,11 +960,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(update_brain_version_assessment))
+        test_print("\n\n{} succeeded".format(update_brain_version_assessment))
 
     def brain_version_assessment_list(self):
         list_brain_version_assessment = (
@@ -840,11 +980,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(list_brain_version_assessment))
+        test_print("\n\n{} succeeded".format(list_brain_version_assessment))
 
     def brain_version_assessment_stop(self):
         stop_brain_version_assessment = (
@@ -862,11 +1002,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(stop_brain_version_assessment))
+        test_print("\n\n{} succeeded".format(stop_brain_version_assessment))
 
     def brain_version_stop_training(self):
         stop_training_brain_version = (
@@ -884,11 +1024,83 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
+        response = self.parse_response(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        test_print("\n\n{} succeeded".format(stop_training_brain_version))
+
+    def deployment_webapp_create(self):
+        create_clouddeployment = (
+            "deployment webapp create -n {} --exported-brain-name {} -o json".format(
+                self.clouddeployment_name, self.exportedbrain_name
+            )
+        )
+
+        response = runner.invoke(cli, create_clouddeployment).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(create_clouddeployment, response),
+        )
+
         response = json.loads(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(stop_training_brain_version))
+        print("\n\n{} succeeded".format(create_clouddeployment))
+
+    def deployment_webapp_show(self):
+        show_clouddeployment = "deployment webapp show -n {} -o json".format(
+            self.clouddeployment_name
+        )
+
+        response = runner.invoke(cli, show_clouddeployment).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(show_clouddeployment, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(show_clouddeployment))
+
+    def deployment_webapp_list(self):
+        list_clouddeployments = "deployment webapp list -o json"
+
+        response = runner.invoke(cli, list_clouddeployments).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(list_clouddeployments, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(list_clouddeployments))
+
+    def deployment_webapp_delete(self):
+        delete_clouddeployment = "deployment webapp delete -n {} --yes -o json".format(
+            self.clouddeployment_name
+        )
+
+        response = runner.invoke(cli, delete_clouddeployment).output
+
+        self.assertFalse(
+            "Error" in response,
+            msg="{} failed with response {}".format(delete_clouddeployment, response),
+        )
+
+        response = json.loads(response)
+
+        self.assertTrue(response["statusCode"] == 200)
+
+        print("\n\n{} succeeded".format(delete_clouddeployment))
 
     def brain_version_assessment_delete(self):
         delete_brain_version_assessment = (
@@ -906,11 +1118,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(delete_brain_version_assessment))
+        test_print("\n\n{} succeeded".format(delete_brain_version_assessment))
 
     def exportedbrain_create(self):
         create_exportedbrain = "exportedbrain create -n {} -b {} -o json".format(
@@ -924,11 +1136,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(create_exportedbrain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(create_exportedbrain))
+        test_print("\n\n{} succeeded".format(create_exportedbrain))
 
     def exportedbrain_show(self):
         show_exportedbrain = "exportedbrain show -n {} -o json".format(
@@ -942,11 +1154,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(show_exportedbrain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(show_exportedbrain))
+        test_print("\n\n{} succeeded".format(show_exportedbrain))
 
     def exportedbrain_list(self):
         list_exportedbrain = "exportedbrain list -o json"
@@ -958,11 +1170,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(list_exportedbrain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(list_exportedbrain))
+        test_print("\n\n{} succeeded".format(list_exportedbrain))
 
     def exportedbrain_update(self):
         update_exportedbrain = "exportedbrain update -n {} --display-name exported_brain_display_name --description exported_brain_description -o json".format(
@@ -976,11 +1188,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(update_exportedbrain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(update_exportedbrain))
+        test_print("\n\n{} succeeded".format(update_exportedbrain))
 
     def exportedbrain_delete(self):
         delete_exportedbrain = "exportedbrain delete -n {} --yes -o json".format(
@@ -994,11 +1206,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(delete_exportedbrain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(delete_exportedbrain))
+        test_print("\n\n{} succeeded".format(delete_exportedbrain))
 
     def brain_version_reset_training(self):
         reset_training_brain_version = (
@@ -1016,11 +1228,11 @@ class TestCLI(unittest.TestCase):
             ),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(reset_training_brain_version))
+        test_print("\n\n{} succeeded".format(reset_training_brain_version))
 
     def brain_version_delete(self):
         delete_brain_version = "brain version delete -n {} -y -o json".format(
@@ -1034,11 +1246,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(delete_brain_version, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(delete_brain_version))
+        test_print("\n\n{} succeeded".format(delete_brain_version))
 
     def simulator_package_remove(self):
         remove_simulator_package = "simulator package remove -n {} -y -o json".format(
@@ -1052,11 +1264,11 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(remove_simulator_package, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 202)
 
-        print("\n\n{} succeeded".format(remove_simulator_package))
+        test_print("\n\n{} succeeded".format(remove_simulator_package))
 
     def brain_delete(self):
         delete_brain = "brain delete -n {} -y -o json".format(self.brain_name)
@@ -1068,35 +1280,33 @@ class TestCLI(unittest.TestCase):
             msg="{} failed with response {}".format(delete_brain, response),
         )
 
-        response = json.loads(response)
+        response = self.parse_response(response)
 
         self.assertTrue(response["statusCode"] == 200)
 
-        print("\n\n{} succeeded".format(delete_brain))
+        test_print("\n\n{} succeeded".format(delete_brain))
 
     def tearDown(self):
-        print("\n\nTearing down all python processes except the test process")
+        test_print("\nKilling unmanaged simulators")
 
-        child_processes = subprocess.Popen(["ps", "-A"], stdout=subprocess.PIPE)
-        output, error = child_processes.communicate()
+        for sim_process in self.unmanaged_simulators:
+            print("   Killing {}".format(sim_process.pid))
+            sim_process.kill()
+            sim_process.wait()
 
-        target_process = "python"
+        other_processes = subprocess.Popen(
+            ["ps", "-A", "-o", "pid,args"], stdout=subprocess.PIPE
+        )
+        output, error = other_processes.communicate()
 
-        if output is not None:
-            for line in output.splitlines():
-                if target_process in str(line):
-                    pid = int(line.split(None, 1)[0])
-
-                    if pid != os.getpid():
-                        os.system("sudo kill %s" % (pid))
-
-        if error is not None:
+        if error:
+            test_print("\n\nError from ps -A -o pid,args")
             for line in error.splitlines():
-                if target_process in str(line):
-                    pid = int(line.split(None, 1)[0])
+                test_print("   {}".format(line))
 
-                    if pid != os.getpid():
-                        os.system("sudo kill %s" % (pid))
+        print("\n\nOther running processes:")
+        for line in output.splitlines():
+            test_print("   {}".format(line))
 
 
 if __name__ == "__main__":
