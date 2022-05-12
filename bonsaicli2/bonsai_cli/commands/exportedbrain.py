@@ -4,7 +4,6 @@ This file contains the code for commands that target a bonsai exported brain in 
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2020, Microsoft Corp."
 
-
 from typing import Any, Dict, List
 import click
 from json import dumps

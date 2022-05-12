@@ -29,8 +29,10 @@ from bonsai_cli.utils import (
 
 from .brain import brain
 from .exportedbrain import exportedbrain
+from .dataset import dataset
 from .simulator import simulator
 from .imported_model import importedmodel
+from .deployment import deployment
 
 log = Logger()
 
@@ -302,10 +304,12 @@ def bonsai_help(ctx: click.Context):
 cli.add_command(bonsai_help)
 cli.add_command(brain)
 cli.add_command(exportedbrain)
+cli.add_command(dataset)
 cli.add_command(simulator)
 cli.add_command(importedmodel)
 cli.add_command(switch)
 cli.add_command(configure)
+cli.add_command(deployment)
 
 
 def main():

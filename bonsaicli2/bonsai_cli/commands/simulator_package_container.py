@@ -71,6 +71,12 @@ def container():
     help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
 )
 @click.option(
+    "--compute-type",
+    default="AzureContainerInstance",
+    help="(experimental) select the simulator compute infrastructure. choose from [AzureContainerInstance (default) | AzureKubernetesService]",
+    hidden=True,
+)
+@click.option(
     "--debug", default=False, is_flag=True, help="Verbose logging for request."
 )
 @click.option("--output", "-o", help="Set output, only json supported.")
@@ -94,6 +100,7 @@ def create_container_simulator_package(
     display_name: str,
     description: str,
     workspace_id: str,
+    compute_type: str,
     debug: bool,
     output: str,
     test: bool,
@@ -139,6 +146,7 @@ def create_container_simulator_package(
             os_type=os_type,
             package_type="container",
             workspace=workspace_id,
+            compute_type=compute_type,
             debug=debug,
             output=output,
         )

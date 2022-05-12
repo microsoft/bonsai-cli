@@ -32,7 +32,7 @@ setup(
         "requests>=2.11",
         "tabulate>=0.7.5",
         "websocket-client>=0.40.0",
-        "msal-extensions>=0.1.3",
+        "msal-extensions==0.3.1",
         "opencensus-ext-azure>=1.0.4",
         "requests_toolbelt>=0.9.1",
     ],

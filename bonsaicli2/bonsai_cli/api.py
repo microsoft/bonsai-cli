@@ -112,6 +112,14 @@ _DELETE_EXPORTED_BRAIN_URL_PATH_TEMPLATE = (
 _UPDATE_EXPORTED_BRAIN_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/exportedBrains/{exportedbrainname}"
 )
+_LIST_DATASETS_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/datasets"
+_CREATE_DATASET_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspacename}/datasets/{datasetname}"
+)
+_GET_DATASET_URL_PATH_TEMPLATE = "/v2/workspaces/{workspacename}/datasets/{datasetname}"
+_DELETE_DATASET_URL_PATH_TEMPLATE = (
+    "/v2/workspaces/{workspacename}/datasets/{datasetname}"
+)
 _LIST_SIM_BASE_IMAGE_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorbaseimages"
 )
@@ -143,6 +151,19 @@ _PATCH_SIM_SESSIONS_URL_PATH_TEMPLATE = (
     "/v2/workspaces/{workspacename}/simulatorSessions/{sessionid}"
 )
 
+_CREATE_WEB_APP_DEPLOYMENT = (
+    "/v2/workspaces/{workspacename}/clouddeployments/{cloudDeploymentName}"
+)
+
+_GET_WEB_APP_DEPLOYMENT = (
+    "/v2/workspaces/{workspacename}/clouddeployments/{cloudDeploymentName}"
+)
+
+_DELETE_WEB_APP_DEPLOYMENT = "/v2/workspaces/{workspacename}/clouddeployments/{cloudDeploymentName}?includeAzureResources={includeAzureResources}"
+
+_LIST_WEB_APP_DEPLOYMENTS = "/v2/workspaces/{workspacename}/clouddeployments"
+
+
 _CREATE_ACTION = "Create"
 _UPDATE_ACTION = "Update"
 _DELETE_ACTION = "Delete"
@@ -161,6 +182,10 @@ _ALL_ASSESSMENTS_OBJECT = "Assessments"
 _BRAIN_OBJECT = "Brain"
 _ALL_EXPORTED_BRAINS_OBJECT = "ExportedBrains"
 _EXPORTED_BRAIN_OBJECT = "ExportedBrain"
+_ALL_DATASETS_OBJECT = "Datasets"
+_DATASET_OBJECT = "Dataset"
+_DEPLOYMENT_CLOUD_WEBAPP = "CloudWebApp"
+_ALL_DEPLOYMENT_CLOUD_WEBAPPS = "CloudWebApps"
 _ALL_BRAINS_OBJECT = "Brains"
 _BRAIN_VERSION_OBJECT = "BrainVersion"
 _ALL_BRAIN_VERSIONS_OBJECT = "BrainVersions"
@@ -1097,6 +1122,7 @@ class BonsaiAPI(object):
         os_type: Optional[str] = None,
         package_type: Optional[str] = None,
         workspace: Optional[str] = None,
+        compute_type: Optional[str] = "AzureContainerInstance",
         publisher_id: Optional[str] = None,
         offer_id: Optional[str] = None,
         plan_id: Optional[str] = None,
@@ -1131,6 +1157,7 @@ class BonsaiAPI(object):
             "modelBaseImageName": model_base_image_name,
             "maxInstanceCount": max_instance_count,
             "spotPercent": spot_percent,
+            "computeType": compute_type,
             "publisherId": publisher_id,
             "offerId": offer_id,
             "planId": plan_id,
@@ -1782,6 +1809,123 @@ class BonsaiAPI(object):
 
         return self._delete(url=url, debug=debug, output=output, event=event)
 
+    def create_aml_dataset(
+        self,
+        name: str,
+        subscription_id: str,
+        resource_group: str,
+        data_source_type: str,
+        data_store_type: str,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        workspace: Optional[str] = None,
+        aml_workspace: Optional[str] = None,
+        aml_dataset_name: Optional[str] = None,
+        aml_datastore_name: Optional[str] = None,
+        aml_version: Optional[int] = 0,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug("Creating a new AML dataset {}".format(name))
+        url_path = _CREATE_DATASET_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            datasetname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_CREATE_ACTION, _DATASET_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_DATASET_OBJECT],
+        )
+
+        data = {
+            "name": name,
+            "displayName": display_name,
+            "description": description,
+            "dataSourceType": data_source_type,
+            "dataStoreType": data_store_type,
+            "connectionString": {
+                "subscriptionId": subscription_id,
+                "resourceGroup": resource_group,
+                "dataSourceType": data_store_type,
+                "machineLearningConnectionString": {
+                    "AMLWorkspace": aml_workspace,
+                    "AMLDatasetName": aml_dataset_name,
+                    "version": aml_version,
+                    "datastoreName": aml_datastore_name,
+                },
+            },
+        }
+
+        return self._put(url=url, data=data, debug=debug, output=output, event=event)
+
+    def list_dataset(
+        self,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug("Getting list of datasets for {}...".format(self._workspace_id))
+        url_path = _LIST_DATASETS_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id
+        )
+        url = urljoin(self._api_url, url_path)
+
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _ALL_DATASETS_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_ALL_DATASETS_OBJECT],
+        )
+
+        return self._get(url=url, debug=debug, output=output, event=event)
+
+    def get_dataset(
+        self,
+        name: str,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting details about dataset {} in workspace {}...".format(
+                name, self._workspace_id
+            )
+        )
+
+        url_path = _GET_DATASET_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            datasetname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _DATASET_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_DATASET_OBJECT],
+        )
+
+        return self._get(url=url, debug=debug, output=output, event=event)
+
+    def delete_dataset(
+        self,
+        name: str,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug("Deleting dataset {}".format(name))
+        url_path = _DELETE_DATASET_URL_PATH_TEMPLATE.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            datasetname=name,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_DELETE_ACTION, _DATASET_OBJECT),
+            ObjectUri=[url_path],
+            ObjectType=[_DATASET_OBJECT, _BRAIN_VERSION_OBJECT],
+        )
+
+        return self._delete(url=url, debug=debug, output=output, event=event)
+
     def list_unmanaged_sim_session(
         self,
         workspace: Optional[str] = None,
@@ -2041,6 +2185,115 @@ class BonsaiAPI(object):
             "{}{}".format(_DELETE_ACTION, _ASSESSMENT_OBJECT),
             ObjectUri=[url_path],
             ObjectType=[_ASSESSMENT_OBJECT],
+        )
+
+        return self._delete(url=url, debug=debug, output=output, event=event)
+
+    def create_webapp_deployment(
+        self,
+        name: str,
+        exported_brain_name: str,
+        display_name: Optional[str] = None,
+        description: Optional[str] = None,
+        app_service_plan_name: Optional[str] = None,
+        azure_ad_app_id: Optional[str] = None,
+        location: Optional[str] = None,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+        export_type: Optional[str] = None,
+    ):
+        log.debug("Creating web app deployment {}".format(name))
+        url_path = _CREATE_WEB_APP_DEPLOYMENT.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            cloudDeploymentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_CREATE_ACTION, _DEPLOYMENT_CLOUD_WEBAPP),
+            ObjectUri=[url_path],
+            ObjectType=[_DEPLOYMENT_CLOUD_WEBAPP],
+        )
+
+        data = {
+            "exportedBrainName": exported_brain_name,
+            "displayName": display_name,
+            "description": description,
+            "location": location,
+            "appServicePlanName": app_service_plan_name,
+            "azureAdAppId": azure_ad_app_id,
+        }
+
+        return self._put(url=url, data=data, debug=debug, output=output, event=event)
+
+    def list_webapp_deployments(
+        self,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting list of web app deployments for {}...".format(self._workspace_id)
+        )
+        url_path = _LIST_WEB_APP_DEPLOYMENTS.format(
+            workspacename=workspace if workspace else self._workspace_id
+        )
+        url = urljoin(self._api_url, url_path)
+
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _DEPLOYMENT_CLOUD_WEBAPP),
+            ObjectUri=[url_path],
+            ObjectType=[_ALL_DEPLOYMENT_CLOUD_WEBAPPS],
+        )
+
+        return self._get(url=url, debug=debug, output=output, event=event)
+
+    def get_webapp_deployment(
+        self,
+        name: str,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug(
+            "Getting of web app deployment {} for {}...".format(
+                name, self._workspace_id
+            )
+        )
+        url_path = _GET_WEB_APP_DEPLOYMENT.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            cloudDeploymentName=name,
+        )
+        url = urljoin(self._api_url, url_path)
+
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_VIEW_ACTION, _DEPLOYMENT_CLOUD_WEBAPP),
+            ObjectUri=[url_path],
+            ObjectType=[_DEPLOYMENT_CLOUD_WEBAPP],
+        )
+
+        return self._get(url=url, debug=debug, output=output, event=event)
+
+    def delete_webapp_deployment(
+        self,
+        name: str,
+        includeAzureResources: bool,
+        workspace: Optional[str] = None,
+        debug: bool = False,
+        output: Optional[str] = None,
+    ):
+        log.debug("Deleting web app deployment {}".format(name))
+        url_path = _DELETE_WEB_APP_DEPLOYMENT.format(
+            workspacename=workspace if workspace else self._workspace_id,
+            cloudDeploymentName=name,
+            includeAzureResources=includeAzureResources,
+        )
+        url = urljoin(self._api_url, url_path)
+        event = self.application_insights_handler.create_event(
+            "{}{}".format(_DELETE_ACTION, _DEPLOYMENT_CLOUD_WEBAPP),
+            ObjectUri=[url_path],
+            ObjectType=[_DEPLOYMENT_CLOUD_WEBAPP],
         )
 
         return self._delete(url=url, debug=debug, output=output, event=event)
