@@ -4,7 +4,6 @@ This file contains the test code for commands that target a bonsai brain in vers
 __author__ = "Karthik Sankara Subramanian"
 __copyright__ = "Copyright 2021, Microsoft Corp."
 
-from click.testing import CliRunner
 from datetime import datetime, timezone
 import json
 import os
@@ -13,11 +12,88 @@ import time
 import unittest
 import getpass
 import socket
-from typing import Any, List
+from typing import Any, Dict, List
 
 from bonsai_cli.commands.bonsai import cli
+from bonsai_cli.commands.diaglets.container_restarts import ContainerRestartsDiaglet
+from bonsai_cli.commands.diaglets.episode_logs_enabled import EpisodeLogsEnabledDiaglet
+from bonsai_cli.commands.diaglets.error_messages import ErrorsDiaglet
+from bonsai_cli.commands.diaglets.iteration_halted import IterationHaltedDiaglet
+from bonsai_cli.commands.diaglets.sdk_version import SDKVersionDiaglet
+from bonsai_cli.commands.diaglets.sim_timeout import SimTimeoutDiaglet
+from bonsai_cli.commands.diaglets.sys_logs_enabled import SysLogsEnabledDiaglet
 
-runner = CliRunner()
+cli = None
+
+# No command should take longer than this to complete.
+COMMAND_TIMEOUT_SECONDS = 600
+TIMEOUT_STATUS_CODE = 999
+
+
+class BonsaiCliOutput:
+    """
+    Holds the output of BonsaiCliRunner (infra) in a fashion compatible with CliRunner();
+    to wit, it exposes an output property.
+    """
+
+    def __init__(self, command: str, output: str, error: str):
+        # If you're seeing weird warnings, be sure to `export PYTHONWARNINGS="ignore"`
+        self.output = output or error
+
+
+class BonsaiCliRunner:
+    """
+    Replaces the CliRunner() used in previous implementations.
+    Can be swapped out with a CliRunner() with no modifications.
+
+    Seems better than CliRunner(), because it can show exceptions that
+    are thrown by the `bonsai` process.
+    """
+
+    def __init__(self):
+        pass
+
+    def invoke(self, cli: Any, command: str):
+        cmd_parts = [s.strip() for s in command.split(" ")]
+        bonsai_cmd = ["bonsai"] + cmd_parts
+
+        proc = subprocess.Popen(
+            bonsai_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        assert proc.stdout is not None
+        assert proc.stderr is not None
+
+        try:
+            proc.wait(timeout=COMMAND_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            print("TIMEOUT IN 'bonsai {}'".format(command), flush=True)
+            retcode = proc.poll()
+            if retcode is None:
+                proc.kill()
+                print("STDOUT=\n{}".format(proc.stdout.read().decode("utf-8")))
+                print("STDERR=\n{}".format(proc.stderr.read().decode("utf-8")))
+                return BonsaiCliOutput(
+                    command,
+                    "",
+                    json.dumps(
+                        {
+                            "statusCode": TIMEOUT_STATUS_CODE,
+                            "error": "COMMAND TIMED OUT",
+                        }
+                    ),
+                )
+
+        return BonsaiCliOutput(
+            command,
+            proc.stdout.read().decode("utf-8"),
+            proc.stderr.read().decode("utf-8"),
+        )
+
+
+runner = BonsaiCliRunner()
 
 current_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
 
@@ -31,14 +107,12 @@ class TestCLI(unittest.TestCase):
     def setUp(self):
         # Uncomment and populate empty value when testing CLI commands against prod endpoints before pypi release
 
-        # os.environ["SIM_WORKSPACE"] = "" # Workspace ID
-        # os.environ["TENANT_ID"] = "" # Tenant ID
+        # os.environ["SIM_WORKSPACE"] = ""  # Workspace ID
+        # os.environ["TENANT_ID"] = ""  # Tenant ID
         # os.environ["URL"] = "https://cp-api.bons.ai"
         # os.environ["GATEWAY_URL"] = "https://api.bons.ai"
         # os.environ["SIM_API_HOST"] = "https://api.bons.ai"
-        # os.environ[
-        #     "SIM_ACCESS_KEY"
-        # ] = "" # Prod sim access key
+        # os.environ["SIM_ACCESS_KEY"] = ""  # Prod sim access key
 
         # This is required to make workspace id unique
         user_name = getpass.getuser()
@@ -128,6 +202,14 @@ class TestCLI(unittest.TestCase):
         self.configure()
 
         #
+        # Two quick tests of the workspace command set.
+        # This is unsupported functionality; these tests just
+        # demonstrate that the ControlPlane endpoints work.
+        #
+        self.show_workspace()
+        self.show_workspace_resources()
+
+        #
         # Start unmanaged sims
         #
         self.start_unmanaged_sims()
@@ -200,6 +282,11 @@ class TestCLI(unittest.TestCase):
         self.brain_version_assessment_delete()
 
         #
+        # Test diagnose command
+        #
+        self.diagnose_brain()
+
+        #
         # Test export commands - except delete (needed for deployment)
         #
         self.exportedbrain_create()
@@ -262,17 +349,44 @@ class TestCLI(unittest.TestCase):
 
         test_print("\n\n{} succeeded".format(configure))
 
-    def parse_response(self, response: str):
+    def show_workspace(self):
+        cmd = "workspace show"
+        response = runner.invoke(cli, cmd).output
+        test_print("\n\n {} => \n{}".format(cmd, response))
+
+        cmd = "workspace show --workspace-id 00000000-0000-0000-0000-000000000001"
+        response = runner.invoke(cli, cmd).output
+        test_print("\n\n {} => \n{}".format(cmd, response))
+        self.assertTrue("Error" in response)
+        self.assertTrue("not found" in response)
+
+    def show_workspace_resources(self):
+        cmd = "workspace resources"
+        response = runner.invoke(cli, cmd).output
+        test_print("\n\n {} => \n{}".format(cmd, response))
+
+        cmd = "workspace resources --workspace-id 00000000-0000-0000-0000-000000000001"
+        response = runner.invoke(cli, cmd).output
+        test_print("\n\n {} => \n{}".format(cmd, response))
+        self.assertTrue("Error" in response)
+        self.assertTrue("not found" in response)
+
+    def parse_response(self, response: str) -> Dict[str, Any]:
         """
         The response from runner.invoke includes the output from check_cli_version.
         Strip this so-not-JSON off of the end, and parse what remains!
         """
         cli_version_tail = response.find("You are using bonsai-cli version")
 
-        if cli_version_tail < 0:
-            return json.loads(response)
+        if cli_version_tail >= 0:
+            response = response[:cli_version_tail]
 
-        return json.loads(response[:cli_version_tail])
+        try:
+            return json.loads(response)
+        except json.decoder.JSONDecodeError as ex:
+            print("CANNOT PARSE\n{}".format(response))
+            print("BECAUSE\n{}".format(ex))
+            return {"statusCode": 0}
 
     def brain_create(self):
         create_brain = "brain create -n {} -o json".format(self.brain_name)
@@ -1286,6 +1400,21 @@ class TestCLI(unittest.TestCase):
 
         test_print("\n\n{} succeeded".format(delete_brain))
 
+    def diagnose_brain(self):
+        diagnose_brain = f"diagnose brain -n {self.brain_name} --version {self.brain_version} --concept-name {self.concept_name} --test"
+
+        response = runner.invoke(cli, diagnose_brain).output
+
+        self.assertTrue(ContainerRestartsDiaglet.friendly_name in response)
+        self.assertTrue(SysLogsEnabledDiaglet.friendly_name in response)
+        self.assertTrue(SDKVersionDiaglet.friendly_name in response)
+        self.assertTrue(SimTimeoutDiaglet.friendly_name in response)
+        self.assertTrue(ErrorsDiaglet.friendly_name in response)
+        self.assertTrue(EpisodeLogsEnabledDiaglet.friendly_name in response)
+        self.assertTrue(IterationHaltedDiaglet.friendly_name in response)
+
+        test_print("\n\n{} succeeded".format(diagnose_brain))
+
     def tearDown(self):
         test_print("\nKilling unmanaged simulators")
 
@@ -1293,20 +1422,6 @@ class TestCLI(unittest.TestCase):
             print("   Killing {}".format(sim_process.pid))
             sim_process.kill()
             sim_process.wait()
-
-        other_processes = subprocess.Popen(
-            ["ps", "-A", "-o", "pid,args"], stdout=subprocess.PIPE
-        )
-        output, error = other_processes.communicate()
-
-        if error:
-            test_print("\n\nError from ps -A -o pid,args")
-            for line in error.splitlines():
-                test_print("   {}".format(line))
-
-        print("\n\nOther running processes:")
-        for line in output.splitlines():
-            test_print("   {}".format(line))
 
 
 if __name__ == "__main__":

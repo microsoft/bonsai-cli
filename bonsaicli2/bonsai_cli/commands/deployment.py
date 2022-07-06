@@ -9,7 +9,7 @@ import click
 from .deployment_webapp import webapp
 
 
-@click.group(hidden=True)
+@click.group(hidden=False)
 def deployment():
     """Deploy operations."""
     pass
