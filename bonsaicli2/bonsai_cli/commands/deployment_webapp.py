@@ -6,6 +6,7 @@ __copyright__ = "Copyright 2022, Microsoft Corp."
 
 from typing import Any, Dict, Iterable
 import click
+import re
 from json import dumps
 
 from bonsai_cli.exceptions import AuthenticationError, BrainServerError
@@ -29,7 +30,7 @@ def webapp():
     "create", short_help="Create a web app cloud deployment for an exported brain."
 )
 @click.pass_context
-@click.option("--name", "-n", help="[Required] Name of the web app.")
+@click.option("--name", "-n", help="[Required] Name of the web app to be created.")
 @click.option(
     "--exported-brain-name", help="[Required] Name of the exported brain to deploy."
 )
@@ -84,8 +85,57 @@ def create_webapp(
             "Name of the web app deployment is required. Only alphanumerics or hyphens are allowed."
         )
 
+    #
+    # the name must conform to the Microsoft.Web/sites naming convention outlined at https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftweb
+    #
+    regex = re.compile(r"^[a-zA-Z0-9\-]*$")
+
+    if (
+        regex.fullmatch(name) is None
+        or len(name) < 2
+        or len(name) > 60
+        or name[1:] == "-"
+        or name[:1] == "-"
+    ):
+        raise_as_click_exception(
+            "A deployment name must be 2-60 characters containing alphanumeric characters and an optional dash '-' character. The name may not start or end with a dash."
+        )
+
     if not exported_brain_name:
-        raise_as_click_exception("Name of the cloud deployment is required")
+        raise_as_click_exception("Name of the exported brain is required")
+
+    #
+    # ensure the user isnt passing their full acr path as the exported brain name
+    #
+    if ".azurecr.io" in exported_brain_name.lower():
+        raise_as_click_exception(
+            "Please use the name of the exported brain, not the full container path."
+        )
+
+    #
+    # check if the exported brain specified exists
+    #
+    try:
+        response = api(use_aad=True).get_exported_brain(
+            name=exported_brain_name,
+            workspace=workspace_id,
+            debug=debug,
+            output=output,
+        )
+
+    except BrainServerError as e:
+        if e.exception["statusCode"] == 404:
+            raise_not_found_as_click_exception(
+                debug,
+                output,
+                "webapp create",
+                "Exported brain",
+                exported_brain_name,
+                test,
+                e,
+            )
+        else:
+            raise_brain_server_error_as_click_exception(debug, output, test, e)
 
     try:
         response = api(use_aad=True).create_webapp_deployment(
@@ -141,12 +191,15 @@ def create_webapp(
         click.echo("Secured During Create: {}".format(secured))
         click.echo("HostName: {}".format(response["hostName"]))
         click.echo("Deployment Status: {}".format(response["deploymentStatus"]))
-        click.echo()
-        click.echo(
-            "Open your browser to http://{}/v1/doc/index.html to review documentation for calling your newly deployed brain once your deployment is complete".format(
-                response["hostName"]
+
+        if response["deploymentStatus"] == "Completed":
+            click.echo()
+            click.echo(
+                "Open your browser to https://{}/swagger.html to review documentation for calling your newly deployed brain.".format(
+                    response["hostName"]
+                )
             )
-        )
+
         click.echo()
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
@@ -296,12 +349,14 @@ def show_webapp(
         click.echo("Secured During Create: {}".format(secured))
         click.echo("HostName: {}".format(response["hostName"]))
         click.echo("Deployment Status: {}".format(response["deploymentStatus"]))
-        click.echo()
-        click.echo(
-            "Open your browser to http://{}/v1/doc/index.html to review documentation for calling your newly deployed brain once your deployment is complete".format(
-                response["hostName"]
+
+        if response["deploymentStatus"] == "Completed":
+            click.echo()
+            click.echo(
+                "Open your browser to https://{}/swagger.html to review documentation for calling your deployed brain.".format(
+                    response["hostName"]
+                )
             )
-        )
 
     version_checker.check_cli_version(wait=True, print_up_to_date=False)
 

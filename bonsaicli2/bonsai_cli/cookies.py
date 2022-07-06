@@ -17,13 +17,31 @@ from .logger import Logger
 
 _BONSAI_COOKIE_FILE = ".bonsaicookies"
 _USERID_SECTION = "USER"
-_SESSION_ID_SECION = "SESSION"
+_SESSION_ID_SECTION = "SESSION"
 _APPLICATION_INSIGHTS_SECTION = "APPLICATION_INSIGHTS"
-_COOKIE_SECTIONS = [_USERID_SECTION, _SESSION_ID_SECION, _APPLICATION_INSIGHTS_SECTION]
+_COOKIE_SECTIONS = [_USERID_SECTION, _SESSION_ID_SECTION, _APPLICATION_INSIGHTS_SECTION]
 _SESSION_ID_SPLIT_CHAR = "|"
 _SESSSION_ID_TIMEDELTA = timedelta(minutes=10)
 
 log = Logger()
+
+
+# Timestamps can occur in one of a few different formats.
+# Parse the timestamp with different formats, to see which one works.
+def parse_timestamp(timestamp: str):
+    formats = [
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+    ]
+
+    for format in formats:
+        try:
+            return datetime.strptime(timestamp, format)
+        except ValueError:
+            # loop around and try the next one
+            pass
+
+    return datetime.strptime("0001-01-01 00:00:00", "%Y-%m-%d %H:%M:%s")
 
 
 class SessionId(object):
@@ -74,7 +92,7 @@ class CookieConfiguration(object):
             self.session_id = SessionId(uuid4())
         else:
             self.session_id.update_expiry()
-        self._update_value(section=_SESSION_ID_SECION, session_id=str(self.session_id))
+        self._update_value(section=_SESSION_ID_SECTION, session_id=str(self.session_id))
 
     @property
     def _config_file(self):
@@ -112,12 +130,10 @@ class CookieConfiguration(object):
             else:
                 # If this is the session section, cast the values into a SessionId object
                 for _, value in self._config_parser.items(section):
-                    if section == _SESSION_ID_SECION:
+                    if section == _SESSION_ID_SECTION:
                         session_id_str, expiry_str = value.split(_SESSION_ID_SPLIT_CHAR)
                         session_id: UUID = UUID(session_id_str)
-                        expiry: datetime = datetime.strptime(
-                            expiry_str, "%Y-%m-%d %H:%M:%S.%f"
-                        )
+                        expiry = parse_timestamp(expiry_str)
                         self.session_id = SessionId(session_id, expiry)
                     elif section == _USERID_SECTION:
                         self.user_id = UUID(value)

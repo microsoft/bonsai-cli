@@ -33,6 +33,8 @@ from .dataset import dataset
 from .simulator import simulator
 from .imported_model import importedmodel
 from .deployment import deployment
+from .diagnose import diagnose
+from .workspace import workspace
 
 log = Logger()
 
@@ -310,6 +312,8 @@ cli.add_command(importedmodel)
 cli.add_command(switch)
 cli.add_command(configure)
 cli.add_command(deployment)
+cli.add_command(workspace)
+cli.add_command(diagnose)
 
 
 def main():

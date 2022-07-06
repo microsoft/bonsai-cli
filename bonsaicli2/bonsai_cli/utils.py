@@ -170,6 +170,29 @@ class AsyncCliVersionChecker(CliVersionCheckerInterface):
 
         user_cli_version = __version__
 
+        # Notify the user if and only if the pypi version is _ahead_ of the local version.
+        # If the user is using a "local" install from the brain repo, the local
+        # version may transiently be ahead of the pypi version.
+
+        upgrade_is_available = False
+
+        if pypi_version:
+            # Compare the version parts in order.
+            user_cli_version_parts = [int(s) for s in user_cli_version.split(".")]
+            num_parts = len(user_cli_version_parts)
+
+            pypi_version_parts = [int(s) for s in pypi_version.split(".")]
+            if len(pypi_version_parts) < num_parts:
+                num_parts = len(pypi_version_parts)
+
+            for n in range(num_parts):
+                if pypi_version_parts[n] > user_cli_version_parts[n]:
+                    upgrade_is_available = True
+                    break
+                elif pypi_version_parts[n] < user_cli_version_parts[n]:
+                    upgrade_is_available = False
+                    break
+
         if not pypi_version:
             click_echo(
                 "You are using bonsai-cli version " + user_cli_version, fg="yellow"
@@ -195,7 +218,7 @@ class AsyncCliVersionChecker(CliVersionCheckerInterface):
                     " version information from PyPi.\n\n{}\n".format(err),
                     fg="red",
                 )
-        elif user_cli_version != pypi_version:
+        elif upgrade_is_available:
             click_echo(
                 "You are using bonsai-cli version " + user_cli_version, fg="yellow"
             )

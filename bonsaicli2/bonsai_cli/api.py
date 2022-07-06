@@ -358,6 +358,13 @@ class BonsaiAPI(object):
             # functionality of the application_insights_handler off.
             self.application_insights_handler = SkeletonApplicationInsightsHandler()
 
+    @property
+    def workspace_id(self):
+        """
+        get the workspace ID associated with the user
+        """
+        return self._workspace_id
+
     def _app_insight_push_enabled(self) -> bool:
         """
         Check the .bonsaicookies file to see if reporting to Application Insights
@@ -658,6 +665,18 @@ class BonsaiAPI(object):
         return self._http_request(
             "DELETE", url, debug=debug, output=output, event=event
         )
+
+    def get_workspace(self, workspace_id: Optional[str] = None):
+        workspace_id = workspace_id or self._workspace_id
+        url_path = "/v2/workspaces/{}".format(workspace_id)
+        url = urljoin(self._api_url, url_path)
+        return self._get(url=url, debug=False, output=None, event=None)
+
+    def get_workspace_resources(self, workspace_id: Optional[str] = None):
+        workspace_id = workspace_id or self._workspace_id
+        url_path = "/v2/workspaces/{}/provisionedResources".format(workspace_id)
+        url = urljoin(self._api_url, url_path)
+        return self._get(url=url, debug=False, output=None, event=None)
 
     def list_brains(
         self,
