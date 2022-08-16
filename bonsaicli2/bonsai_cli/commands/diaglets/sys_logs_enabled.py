@@ -1,4 +1,3 @@
-import pandas as pd
 from datetime import timedelta
 from bonsai_cli.commands.diaglets.diaglet_base import Diaglet
 from bonsai_cli.commands.diaglets.diaglet_configuration import DiagletConfiguration
@@ -29,7 +28,7 @@ class SysLogsEnabledDiaglet(Diaglet):
         if self.diagnostic_configuration.is_test:
             # Create a Python list of dictionaries
             data = [{"Message": "This is an automated test"}]
-            df = pd.DataFrame(data)
+            df = self.get_test_dataframe(data)
         else:
             df, _ = self.run_kql_query(kql_query, timespan)
 
