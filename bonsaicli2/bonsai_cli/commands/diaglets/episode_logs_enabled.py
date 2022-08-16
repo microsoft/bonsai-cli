@@ -1,5 +1,3 @@
-import pandas as pd
-from pandas import DataFrame
 from datetime import timedelta
 from bonsai_cli.commands.diaglets.diaglet_base import Diaglet
 from bonsai_cli.commands.diaglets.diaglet_configuration import DiagletConfiguration
@@ -20,7 +18,7 @@ class EpisodeLogsEnabledDiaglet(Diaglet):
         kql_query = "\n".join(
             [
                 "EpisodeLog_CL",
-                f'| where BrainName_s=="{self.diagnostic_configuration.brain_name}"',
+                f'| where BrainName_s=="{self.diagnostic_configuration.brain_name.lower()}"',  # must be lower case
                 f"| where BrainVersion_d=={self.diagnostic_configuration.brain_version}",
                 "| limit 1",
             ]
@@ -31,7 +29,7 @@ class EpisodeLogsEnabledDiaglet(Diaglet):
         if self.diagnostic_configuration.is_test:
             # Create a Python list of dictionaries
             data = [{"RecordA": "Dummy", "RecordB": 404, "RecordC": "Test"}]
-            df: DataFrame = pd.DataFrame(data)
+            df = self.get_test_dataframe(data)
         else:
             df, _ = self.run_kql_query(kql_query, timespan)
 

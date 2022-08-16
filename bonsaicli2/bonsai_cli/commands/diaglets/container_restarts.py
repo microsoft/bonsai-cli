@@ -2,8 +2,6 @@ import os
 from typing import Any, Dict, Tuple
 from azure.mgmt.containerinstance import ContainerInstanceManagementClient
 from azure.mgmt.containerinstance.models import ContainerGroup
-from azure.identity import DefaultAzureCredential
-
 from bonsai_cli.commands.diaglets.diaglet_configuration import DiagletConfiguration
 from bonsai_cli.commands.diaglets.diaglet_base import Diaglet
 import csv
@@ -30,7 +28,7 @@ class ContainerRestartsDiaglet(Diaglet):
         self.message: str = "There are no simulator restarts."
 
         # Acquire a credential object
-        credential = DefaultAzureCredential()
+        credential = self.acquire_token_credential()
 
         # https://docs.microsoft.com/en-us/python/api/azure-mgmt-containerinstance/azure.mgmt.containerinstance.containerinstancemanagementclient?view=azure-python
         aci_client: ContainerInstanceManagementClient = (
@@ -75,7 +73,9 @@ class ContainerRestartsDiaglet(Diaglet):
         total_restarts = 0
         total_instances = 0
 
-        file: str = self.__class__.__name__
+        file: str = (
+            self.__class__.__name__ + "_" + self.diagnostic_configuration.concept_name
+        )
 
         file: str = os.path.join(
             self.diagnostic_configuration.log_path,
