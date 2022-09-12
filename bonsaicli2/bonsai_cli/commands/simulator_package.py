@@ -141,6 +141,7 @@ def show_simulator_package(
                     "cores": response["coresPerInstance"],
                     "memory": response["memInGbPerInstance"],
                     "maximumInstanceCount": response["maxInstanceCount"],
+                    "spotPercent": response["spotPercent"],
                 },
             }
 
@@ -155,6 +156,7 @@ def show_simulator_package(
             click.echo(
                 "Maximum Instance Count: {}".format(response["maxInstanceCount"])
             )
+            click.echo("Spot Percent: {}".format(response["spotPercent"]))
 
     except BrainServerError as e:
         if e.exception["statusCode"] == 404:
