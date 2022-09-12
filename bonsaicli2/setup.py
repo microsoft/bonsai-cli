@@ -32,6 +32,7 @@ setup(
         "requests>=2.11",
         "tabulate>=0.7.5",
         "azure-identity>=1.10.0",
+        "azure-core>=1.23.0",
         "azure-monitor-query>=1.0.2",
         "azure-mgmt-containerinstance>=9.2.0",
         "pandas",

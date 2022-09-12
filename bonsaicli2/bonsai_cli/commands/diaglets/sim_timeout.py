@@ -1,4 +1,3 @@
-import pandas as pd
 from datetime import timedelta
 from bonsai_cli.commands.diaglets.diaglet_base import Diaglet
 from bonsai_cli.commands.diaglets.diaglet_configuration import DiagletConfiguration
@@ -29,11 +28,11 @@ class SimTimeoutDiaglet(Diaglet):
         if self.diagnostic_configuration.is_test:
             # Create a Python list of dictionaries
             data = [{"Message": "This is an automated test"}]
-            df = pd.DataFrame(data)
+            df = self.get_test_dataframe(data)
         else:
             df, _ = self.run_kql_query(kql_query, timespan)
 
         if len(df) == 0:
             self.message = f"There are no simulator timeouts."
         else:
-            self.message = f"There are {len(df)} simulator timeouts. See https://docs.microsoft.com/en-us/bonsai/troubleshoot/managed-sims/timeout to learn about common causes and remedies for timeouts."
+            self.message = f"There are {len(df)} simulator timeouts. See https://docs.microsoft.com/bonsai/cli/sim-timeout to learn about common causes and remedies for timeouts."

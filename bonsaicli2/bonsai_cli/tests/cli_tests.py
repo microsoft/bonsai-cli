@@ -1401,7 +1401,7 @@ class TestCLI(unittest.TestCase):
         test_print("\n\n{} succeeded".format(delete_brain))
 
     def diagnose_brain(self):
-        diagnose_brain = f"diagnose brain -n {self.brain_name} --version {self.brain_version} --concept-name {self.concept_name} --test"
+        diagnose_brain = f"brain version diagnose -n {self.brain_name} --version {self.brain_version} --concept-name {self.concept_name} --test"
 
         response = runner.invoke(cli, diagnose_brain).output
 

@@ -94,6 +94,11 @@ def modelfile():
     hidden=True,
 )
 @click.option(
+    "--managed-app-region",
+    help="ManagedApp Region currently running under customer subscription for the offer chosen.",
+    hidden=True,
+)
+@click.option(
     "--debug", default=False, is_flag=True, help="Verbose logging for request."
 )
 @click.option("--output", "-o", help="Set output, only json supported.")
@@ -120,6 +125,7 @@ def create_modelfile_simulator_package(
     compute_type: str,
     managed_app_resourcegroup_name: str,
     managed_app_name: str,
+    managed_app_region: str,
     os_type: str,
     debug: bool,
     output: str,
@@ -145,6 +151,15 @@ def create_modelfile_simulator_package(
     if not os_type:
         required_options_provided = False
         error_msg += "\nOS Type is required"
+
+    if (managed_app_resourcegroup_name or managed_app_name or managed_app_region) and (
+        not managed_app_resourcegroup_name
+        or not managed_app_name
+        or not managed_app_region
+    ):
+
+        required_options_provided = False
+        error_msg += "\n ManagedApp ResourceGroupName, ManagedAppName and ManagedAppRegion, all 3 attributes are required"
 
     if not required_options_provided:
         raise_as_click_exception(error_msg)
@@ -241,6 +256,7 @@ def create_modelfile_simulator_package(
             part_number=part_number,
             managed_app_resourcegroup_name=managed_app_resourcegroup_name,
             managed_app_name=managed_app_name,
+            managed_app_region=managed_app_region,
             debug=debug,
             output=output,
         )

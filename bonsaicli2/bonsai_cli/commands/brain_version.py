@@ -6,6 +6,9 @@ __copyright__ = "Copyright 2020, Microsoft Corp."
 
 from typing import Any, Dict, List, Optional
 import click
+import os
+import shutil
+from datetime import datetime
 from json import dumps
 from tabulate import tabulate
 
@@ -21,6 +24,7 @@ from bonsai_cli.utils import (
     raise_not_found_as_click_exception,
 )
 
+from bonsai_cli.commands.diaglets.diaglet_base import Diaglet
 
 from .assessment import assessment
 
@@ -1638,6 +1642,240 @@ def stop_assessing():
     pass
 
 
+@click.command(
+    "diagnose",
+    short_help="Checks the training health of a brain and its simulators. Requires access to additional Azure services and may prompt for credentials.",
+)
+@click.pass_context
+@click.option("--name", "-n", help="[Required] Name of the brain.")
+@click.option(
+    "--version", type=int, help="Version to check training health, defaults to latest."
+)
+@click.option(
+    "--all", default=False, is_flag=True, help="Flag to reset all concepts and lessons."
+)
+@click.option("--concept-name", "-c", help="Concept to check.")
+@click.option(
+    "--workspace-id",
+    "-w",
+    help="Please provide the workspace id if you would like to override the default target workspace. If your current Azure Active Directory login does not have access to this workspace, you will need to configure the workspace using bonsai configure.",
+)
+@click.option(
+    "--debug", default=False, is_flag=True, help="Verbose logging for request."
+)
+@click.option("--output", "-o", help="Set the output type, only 'zip' is supported.")
+@click.option(
+    "--test",
+    default=False,
+    is_flag=True,
+    help="Enhanced response for testing.",
+    hidden=True,
+)
+def diagnose_brain_version(
+    ctx: click.Context,
+    name: str,
+    version: int,
+    all: bool,
+    concept_name: str,
+    workspace_id: Optional[str],
+    debug: bool,
+    output: str,
+    test: bool,
+):
+
+    # import the additional diaglets
+    from bonsai_cli.commands.diaglets.diaglet_configuration import DiagletConfiguration
+    from bonsai_cli.commands.diaglets.container_restarts import ContainerRestartsDiaglet
+    from bonsai_cli.commands.diaglets.error_messages import ErrorsDiaglet
+    from bonsai_cli.commands.diaglets.episode_logs_enabled import (
+        EpisodeLogsEnabledDiaglet,
+    )
+    from bonsai_cli.commands.diaglets.iteration_halted import IterationHaltedDiaglet
+    from bonsai_cli.commands.diaglets.last_n_records import LastNRecordsDiaglet
+    from bonsai_cli.commands.diaglets.last_n_records import LastNRecordsDiaglet
+    from bonsai_cli.commands.diaglets.sdk_version import SDKVersionDiaglet
+    from bonsai_cli.commands.diaglets.sim_timeout import SimTimeoutDiaglet
+    from bonsai_cli.commands.diaglets.sys_logs_enabled import SysLogsEnabledDiaglet
+
+    version_checker = get_version_checker(ctx, interactive=not output)
+
+    if not name:
+        raise_as_click_exception("Name of the brain is required.")
+
+    if not version:
+        version = get_latest_brain_version(name, "diagnose brain", False, "", False)
+
+    if not all and not concept_name:
+        try:
+            show_brain_version_response = api(use_aad=True).get_brain_version(
+                name, version, workspace=workspace_id, debug=debug, output=output
+            )
+
+            if len(show_brain_version_response["concepts"]) > 0:
+                concept_name = show_brain_version_response["concepts"][0]["name"]
+
+            else:
+                raise_as_click_exception(
+                    "Concept name not provided and no concept name found in inkling"
+                )
+
+        except BrainServerError as e:
+            if e.exception["statusCode"] == 404:
+                raise_not_found_as_click_exception(
+                    debug,
+                    output,
+                    "diagnose brain version",
+                    "Brain '{}' version".format(name),
+                    "{}".format(version),
+                    test,
+                    e,
+                )
+            else:
+                raise_brain_server_error_as_click_exception(debug, output, test, e)
+
+        except AuthenticationError as e:
+            raise_as_click_exception(e)
+
+        except Exception as e:
+            raise_client_side_click_exception(
+                output, test, "{}: {}".format(type(e), e.args)
+            )
+
+    if output and output != "zip":
+        raise_as_click_exception("The output can only be 'zip'")
+
+    bonsai_api = api(True)
+
+    workspace = workspace_id if workspace_id else bonsai_api.workspace_id
+
+    workspace_resources = bonsai_api.get_workspace_resources(workspace)
+
+    diaglet_config = DiagletConfiguration()
+    diaglet_config.brain_name = name
+    diaglet_config.brain_version = version
+    diaglet_config.concept_name = concept_name
+    diaglet_config.is_test = test
+    diaglet_config.unique_name = str(
+        (datetime.now() - datetime(1, 1, 1)).total_seconds()
+    ).replace(".", "")
+
+    diaglet_config.workspace_id = workspace
+
+    diaglet_config.subscription_id = workspace_resources["subscriptionId"]
+    diaglet_config.managed_resource_group_name = workspace_resources[
+        "serviceProvisionedResourceGroup"
+    ]
+    diaglet_config.log_analytics_workspace_id = workspace_resources[
+        "logAnalyticsWorkspaceId"
+    ]
+
+    log_dir: str = ""
+
+    # dont write files during the tests
+    if not test:
+        if not os.path.exists(diaglet_config.log_path):
+            os.makedirs(diaglet_config.log_path)
+
+        log_dir = os.path.join(diaglet_config.log_path, diaglet_config.unique_name)
+
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+    concepts: List[str] = []
+
+    if not all:
+        concepts.append(concept_name)
+    else:
+        try:
+            # call the Bonsai API to get brain version details
+            response: Any = api(use_aad=True).get_brain_version(
+                name=diaglet_config.brain_name,
+                version=diaglet_config.brain_version,
+                workspace=diaglet_config.workspace_id,
+            )
+
+            for c in response["concepts"]:
+                concepts.append(c["name"])
+
+        except:
+            raise_as_click_exception(
+                f"Could not find details for {diaglet_config.workspace_id}/{diaglet_config.brain_name}/{diaglet_config.brain_version}"
+            )
+
+    print()
+    print(
+        f"Analyzing training diagnostics for brain {diaglet_config.brain_name}, version {diaglet_config.brain_version} ..."
+    )
+
+    for c in concepts:
+        print()
+        print(f"Diagnosing concept {c}:")
+        print()
+
+        diaglet_config.concept_name = c
+
+        # the chain of diaglets to run. order is important because diaglets can stop processing the chain
+        diaglet_chain = [
+            ContainerRestartsDiaglet(diaglet_config),
+            [
+                SysLogsEnabledDiaglet(diaglet_config),
+                SDKVersionDiaglet(diaglet_config),
+                SimTimeoutDiaglet(diaglet_config),
+                ErrorsDiaglet(diaglet_config),
+            ],
+            [
+                EpisodeLogsEnabledDiaglet(diaglet_config),
+                IterationHaltedDiaglet(diaglet_config),
+            ],
+        ]
+
+        for diaglet in diaglet_chain:
+            if isinstance(diaglet, Diaglet):
+                break_chain = run_diaglet(diaglet)
+
+                if break_chain:
+                    print("Cannot continue diagnostics for this concept.\n")
+                    break
+            else:  # its a list
+                for d in diaglet:
+                    break_segment = run_diaglet(d)
+
+                    if break_segment:
+                        print(
+                            "Cannot continue diagnostics in this segment for this concept.\n"
+                        )
+                        break
+
+    if output == "zip":
+        # also save the last N records in case the diaglets missed something
+        last_n_records = LastNRecordsDiaglet(diaglet_config)
+        last_n_records.diagnose()
+
+        # zip up the files and delete the directory
+        output_filename = os.path.join(
+            diaglet_config.log_path, f"diagnostics_{diaglet_config.unique_name}"
+        )
+
+        shutil.make_archive(output_filename, "zip", log_dir)
+        shutil.rmtree(log_dir)
+
+        # notify the user where the files are
+        print(f"All logs saved to {output_filename}.zip")
+
+    version_checker.check_cli_version(wait=True, print_up_to_date=False)
+
+
+def run_diaglet(diaglet: Diaglet) -> bool:
+    """
+    runs the diaglet to get the output message and whether it should break the chain or segment it is in
+    """
+    diaglet.diagnose()
+
+    print(f"{diaglet.friendly_name} -- {diaglet.message}\n")
+
+    return diaglet.break_the_chain
+
+
 version.add_command(create_brain_version)
 version.add_command(show_brain_version)
 version.add_command(update_brain_version)
@@ -1655,3 +1893,4 @@ version.add_command(stop_assessing)
 version.add_command(start_logging)
 version.add_command(stop_logging)
 version.add_command(assessment)
+version.add_command(diagnose_brain_version)

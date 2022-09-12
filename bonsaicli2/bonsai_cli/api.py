@@ -1149,6 +1149,7 @@ class BonsaiAPI(object):
         part_number: Optional[str] = None,
         managed_app_resourcegroup_name: Optional[str] = None,
         managed_app_name: Optional[str] = None,
+        managed_app_region: Optional[str] = None,
         debug: bool = False,
         output: Optional[str] = None,
     ):
@@ -1164,6 +1165,14 @@ class BonsaiAPI(object):
             ObjectType=[_SIMULATOR_PACKAGE_OBJECT],
         )
 
+        marketplaceOffer = {
+            "publisherId": publisher_id,
+            "offerId": offer_id,
+            "planId": plan_id,
+            "billingLicenseRgName": managed_app_resourcegroup_name,
+            "billingLicenseName": managed_app_name,
+            "billingLicenseRegion": managed_app_region,
+        }
         data = {
             "coresPerInstance": cores_per_instance,
             "memInGbPerInstance": memory_in_gb_per_instance,
@@ -1177,13 +1186,7 @@ class BonsaiAPI(object):
             "maxInstanceCount": max_instance_count,
             "spotPercent": spot_percent,
             "computeType": compute_type,
-            "publisherId": publisher_id,
-            "offerId": offer_id,
-            "planId": plan_id,
-            "meterId": meter_id,
-            "partNumber": part_number,
-            "managedAppResourceGroupName": managed_app_resourcegroup_name,
-            "managedAppName": managed_app_name,
+            "marketplaceOffer": marketplaceOffer,
         }
 
         return self._put(url=url, data=data, debug=debug, output=output, event=event)
