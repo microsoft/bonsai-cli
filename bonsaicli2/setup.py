@@ -37,7 +37,7 @@ setup(
         "azure-mgmt-containerinstance>=9.2.0",
         "pandas",
         "websocket-client>=0.40.0",
-        "msal-extensions==0.3.1",
+        "msal-extensions>=1.0,<1.1",
         "opencensus-ext-azure>=1.0.4",
         "requests_toolbelt>=0.9.1",
     ],

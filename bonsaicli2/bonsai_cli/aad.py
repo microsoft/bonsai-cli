@@ -12,7 +12,7 @@ from .logger import Logger
 from .exceptions import AuthenticationError
 
 from msal import PublicClientApplication
-from msal_extensions import TokenCache
+from msal_extensions import FilePersistence, PersistedTokenCache
 from requests.exceptions import ConnectionError
 
 log = Logger()
@@ -60,7 +60,8 @@ class AADClient(object):
     def __init__(self, tenant_id: Optional[str] = None):
         self._cache_file = get_aad_cache_file()
 
-        self.cache = TokenCache(self._cache_file)
+        persistence = FilePersistence(self._cache_file)
+        self.cache = PersistedTokenCache(persistence)
 
         retry_count = 1
 
