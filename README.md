@@ -4,9 +4,9 @@ A python library for making API calls to Bonsai BRAIN.
 
 Documentation for the Bonsai CLI can be found on the Bonsai Docs website.
 
-**Guide to CLI installation and usage:** [http://docs.bons.ai/guides/cli-guide.html]()
+**Guide to CLI installation and usage:** [https://learn.microsoft.com/en-us/bonsai/cli/?tabs=windows]()
 
-**Full CLI Reference Documentation:** [http://docs.bons.ai/references/cli-reference.html]()
+**Full CLI Reference Documentation:** [https://learn.microsoft.com/en-us/bonsai/]()
 
 Quick Installation
 ------------
